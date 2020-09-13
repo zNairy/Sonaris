@@ -1,2 +1,2 @@
 # Sonaris
-Simple Python Backdoor
+Python Backdoor

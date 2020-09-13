@@ -1,0 +1,13 @@
+{
+    "config": {
+        "namefile": {
+            "backdoor": "",
+            "vbscript": ""
+        },
+
+        "path": {
+            "backdoor": "",
+            "root": ""
+        }
+    }
+}
