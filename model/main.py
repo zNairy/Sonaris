@@ -34,7 +34,7 @@ class DecompressFiles:
             Zip_ref.close()
             return namefile, path
         except PermissionError:
-            windll.user32.MessageBoxW(0, 'message here', 'title here', 64)
+            windll.user32.MessageBoxW(0, 'message here', 'title here', 16)
             sys.exit(0)
         except:
             sys.exit(0)
