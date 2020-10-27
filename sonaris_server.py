@@ -95,16 +95,6 @@ class Sonaris(object):
             
     def SaveScreenshot(self, header, connection):
         screenshot = b''
-        '''
-        while True is not False:
-            if(len(screenshot) >= header['numofbytes']):
-                break
-            else:
-                screenshot += connection.recv(header['numofbytes'])
-
-            print(colored(f'{int((len(screenshot)/header["numofbytes"])*100)}% {len(screenshot)} bytes received', 'yellow'), end='\r')
-        '''
-
         while(len(screenshot) <= header['numofbytes']):
             screenshot += connection.recv(header['numofbytes'])
             print(colored(f'{int((len(screenshot)/header["numofbytes"])*100)}% {len(screenshot)} bytes received', 'yellow'), end='\r')
@@ -122,15 +112,6 @@ class Sonaris(object):
 
     def SavingLargeFile(self, header, connection):
         file_downloaded = b''
-        '''
-        while True is not False:
-            if(len(file_downloaded) >= header['numofbytes']):
-                break
-            else:
-                file_downloaded += connection.recv(header['numofbytes'])
-
-            print(colored(f'{int((len(file_downloaded)/header["numofbytes"])*100)}% {len(file_downloaded)} bytes received', 'yellow'), end='\r')
-        '''
         while(len(file_downloaded) <= header['numofbytes']):
             file_downloaded += connection.recv(header['numofbytes'])
             print(colored(f'{int((len(file_downloaded)/header["numofbytes"])*100)}% {len(file_downloaded)} bytes received', 'yellow'), end='\r')
@@ -180,13 +161,7 @@ class Sonaris(object):
             connection.send(command.encode())
             header = loads(connection.recv(self._CmdBufferSize))
             received_command = b''
-            '''
-            while True is not False:
-                if(len(received_command) >= header['size']):
-                    break
-                else:
-                    received_command += connection.recv(header['size'])
-            '''
+
             while(len(received_command) <= header['size']):
                 received_command += connection.recv(header['size'])
                 print(colored(f'{int((len(received_command)/header["numofbytes"])*100)}% {len(received_command)} bytes received', 'yellow'), end='\r')
