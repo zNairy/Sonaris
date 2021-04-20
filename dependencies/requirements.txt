@@ -1,8 +1,0 @@
-pywin32
-psutil
-wmi
-pyarmor
-pyinstaller
-pyautogui
-requests
-termcolor
