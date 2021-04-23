@@ -144,7 +144,6 @@ class Server(object):
             "/author": {"local": True, "action": self.showCodeAuthor},
             "/contact": {"local": True, "action": self.showContact},
             "/version": {"local": True, "action": self.showVersion},
-            "/lastcommand": {"local": True, "action": self.showLastCommand},
             "/internalcommands": {"local": True, "action": self.internalcommands},
         }
 
@@ -172,7 +171,8 @@ class Server(object):
         while len(received) < header['bytes']:
             received += connection.recv(header['bytes'])
         
-        printr(received.decode(), f'\nreturned in {self.elapsedTime(header["time"], datetime.now().strftime("%M %S").split())} seconds.')
+        print(received.decode())
+        printr(f'returned in {self.elapsedTime(header["time"], datetime.now().strftime("%M %S").split())} seconds.')
 
     def sendCommand(self, command):
         self.lastCommand = command
@@ -224,15 +224,13 @@ class Server(object):
             self.__Server.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
             self.__Server.bind(self.__Address)
             self.__Server.listen(1)
+
         except OverflowError:
-            printr(f' "{self.__Address[1]}" [red]Port too large, must be 0-65535')
-            exit(1)
+            printr(f' "{self.__Address[1]}" [red]Port too large, must be 0-65535');exit(1)
         except OSError:
-            printr(f' "{self.__Address[0]}" Cannot assign requested address')
-            exit(1)
+            printr(f' "{self.__Address[0]}" Cannot assign requested address');exit(1)
         except gaierror:
-            printr(f' "{self.__Address[0]}" [red]Name or service not known')
-            exit(1)
+            printr(f' "{self.__Address[0]}" [red]Name or service not known');exit(1)
 
     def info(self):
         return f' Server is open in {self.__Address[0]}:{self.__Address[1]}'

