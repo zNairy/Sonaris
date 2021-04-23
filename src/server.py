@@ -7,7 +7,6 @@ __version__ = '2.0'
 from socket import socket, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR, gaierror
 from threading import Thread
 from getpass import getuser
-from pprint import pprint
 from pickle import loads
 from datetime import datetime
 from pathlib import Path
@@ -39,15 +38,6 @@ class Server(object):
     def detach(self, name):
         if self.userAttached:
             self.userAttached = self.userCwd = ''
-        else:
-            printr(f'[red] No session currently attached.')
-
-    def changeDirectory(self):
-        if self.userAttached:
-            connection = self.connectedUsers[self.userAttached]['conn']
-            connection.send(self.lastCommand.encode())
-            header = loads(connection.recv(512))
-
         else:
             printr(f'[red] No session currently attached.')
 

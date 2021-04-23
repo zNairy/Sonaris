@@ -54,14 +54,14 @@ class Client(object):
 
     def changeDirectory(self, directory):
         try:
-            chdir(directory.strip())
+            chdir(directory)
             self.sendCommand(self.lastCommand, '.')
         except FileNotFoundError:
             self.sendCommand(self.lastCommand)
 
-    def download(self, args):
-        if Path(args).is_file():
-            namefile, extension, file = self.splitFile(args)
+    def download(self, arg):
+        if Path(arg).is_file():
+            namefile, extension, file = self.splitFile(arg)
             header = {
                 "namefile": namefile,
                 "extension": extension,
@@ -75,7 +75,7 @@ class Client(object):
             self.sendFile(file)
 
         else:
-            self.sendHeader({"namefile":args, "exists": False})
+            self.sendHeader({"namefile":arg, "exists": False})
 
     def allCommands(self):
         return {
@@ -113,7 +113,7 @@ class Client(object):
         command, args = self.splitCommand(cmd)
 
         if command:
-            command['action'](args)
+            command['action'](args.strip())
         else:
             self.sendCommand(cmd)
 
