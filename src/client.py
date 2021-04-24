@@ -14,7 +14,7 @@ from subprocess import getoutput
 from requests import get, packages
 from os import uname, chdir, getcwd
 from time import sleep
-#from requests.packages.urllib3.exceptions import InsecureRequestWarning
+#from packages.urllib3.exceptions import InsecureRequestWarning
 
 #packages.urllib3.disable_warnings(InsecureRequestWarning)
 
