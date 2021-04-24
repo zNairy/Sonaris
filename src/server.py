@@ -114,7 +114,7 @@ class Server(object):
 
     def clearScreen(self, args=''):
         system('clear' if uname().sysname.lower() == 'linux' else 'cls')
-    
+
     def showSessions(self, args):
         if self.connectedUsers:
             print(''.join(f'  -{name}\n' for name in self.connectedUsers.keys()))
@@ -123,7 +123,7 @@ class Server(object):
 
     def showVersion(self, args):
         printr(__version__)
-    
+
     def showContact(self, args):
         printr(__contact__)
 
@@ -179,7 +179,7 @@ class Server(object):
         received = b''
         while len(received) < header['bytes']:
             received += connection.recv(header['bytes'])
-        
+
         print(received.decode())
         printr(f'returned in {self.elapsedTime(header["time"], datetime.now().strftime("%M %S").split())} seconds.')
 
