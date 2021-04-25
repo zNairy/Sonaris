@@ -1,1 +1,2 @@
 rich==10.1.0
+pyscreenshot==3.0
