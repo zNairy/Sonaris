@@ -95,8 +95,8 @@ class Server(object):
                     else:
                         printr(f'[red] File {args} not found.')
 
-                except Exception as err:
-                    printr(f'[red] {err}')
+                except PermissionError:
+                    printr(f'[red] Permission denied: {args}')
             else:
                 printr('Info: Upload a file to client. [green]Ex: /upload nothing.pdf')
         else:
@@ -257,7 +257,7 @@ class Server(object):
 
     def listenConnections(self):
         while True:
-            connection, address = self.__Server.accept()
+            connection, address = self.__Server.accept();del(address)
             response = loads(connection.recv(1024))
             response.update({"conn": connection})
             self.addUser(response)

