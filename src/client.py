@@ -44,7 +44,7 @@ class Client(object):
 
     # taking a screenshot
     def screenshot(self, args):
-        grab().save(self.screenshotPath) # taking and saving the screnshot
+        grab().save(self.screenshotPath) # taking and saving the screenshot
         namefile, extension, file = self.splitFile(self.screenshotPath);del(namefile)
         self.removeScreenshot()
         

