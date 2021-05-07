@@ -97,7 +97,7 @@ class Client(object):
             "path": "screenshots"
         }
 
-        self.sendHeader(header)(header)
+        self.sendHeader(header)
         sleep(1)
         self.__Client.send(file)
     
