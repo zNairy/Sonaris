@@ -5,8 +5,8 @@ __author__ = '@zNairy'
 __contact__ = 'Discord: __Nairy__#7181 | Github: https://github.com/zNairy/'
 __version__ = '2.0'
 
-from src.parserArguments import createSetupParser
-from src.server import Server
+from parserArguments import createSetupParser
+from server import Server
 
 def main():
     parser, args = createSetupParser()
