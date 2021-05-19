@@ -1,3 +1,4 @@
 opencv-python==4.5.1.48
+psutil==5.8.0
 rich==10.1.0
 pyscreenshot==3.0
