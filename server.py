@@ -42,7 +42,7 @@ class Server(object):
                     table.add_column(column)
 
                 for process in processInfo: # adding the rows
-                    table.add_row(process['pid'], process['user'], process['name'], process['exe'], process['cwd'])
+                    table.add_row(str(process['pid']), process['username'], process['name'], process['exe'], process['cwd'])
                 
                 console = Console() # creating the Cosole object
                 console.print(table, f"{header['total']} processes running", justify="center") # printing the table
