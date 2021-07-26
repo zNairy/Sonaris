@@ -172,7 +172,11 @@ class Server(object):
         while True:
             frame = self.getCurrentUser()['conn'].recv(32768)
             if frame != b'/micstreamstop':
-                microphoneStream.write(frame)
+                try:
+                    microphoneStream.write(frame)
+                except Exception:
+                    microphoneStream.stop()
+                    break
             else:
                 microphoneStream.stop()
                 break
