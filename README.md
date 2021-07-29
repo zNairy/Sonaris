@@ -1,5 +1,5 @@
 ![badges](https://img.shields.io/badge/Python-v3.8-red)
-<h1 align='center'><i>"Get ready to hack the planet"</i><img src='./image/logo.png'  height='350'></h1>
+<h1 align='center'><i>"Get ready to hack the planet!"</i><img src='./image/logo.png'  height='350'></h1>
 
 ## Instalação
 Baixe ou clone o repositório usando:
