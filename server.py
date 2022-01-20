@@ -4,6 +4,7 @@ __author__ = '@zNairy'
 __contact__ = 'Discord: zNairy#7181 | Github: https://github.com/zNairy/'
 __version__ = '2.0'
 
+#teste
 from socket import socket, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR, gaierror
 from threading import Thread
 from getpass import getuser
